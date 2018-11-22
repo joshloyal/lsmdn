@@ -4,6 +4,30 @@
 
 namespace lsmdn {
 
+    class UniformSampler {
+    public:
+        UniformSampler(const double min,
+                       const double max,
+                       std::mt19937_64 &random_state);
+        double single_sample();
+        arma::vec sample(unsigned int num_samples);
+    private:
+        std::uniform_real_distribution<> uniform_dist_;
+        std::mt19937_64 &random_state_;
+    };
+
+    class NormalSampler {
+    public:
+        NormalSampler(const double mean,
+                      const double stdde,
+                      std::mt19937_64 &random_state);
+        double single_sample();
+        arma::vec sample(unsigned int num_samples);
+    private:
+        std::normal_distribution<> normal_dist_;
+        std::mt19937_64 &random_state_;
+    };
+
     // Samples from an inverse gamma distribution using the
     // representation:
     // y_i ~ gamma(shape, 1.0/scale)
@@ -14,7 +38,7 @@ namespace lsmdn {
                             const double scale,
                             std::mt19937_64 &random_state);
 
-        arma::vec draw(unsigned int num_samples);
+        arma::vec sample(unsigned int num_samples);
     private:
         std::gamma_distribution<double> gamma_dist_;
         std::mt19937_64 &random_state_;
@@ -28,8 +52,8 @@ namespace lsmdn {
     public:
         DirichletSampler(arma::vec &alphas,
                          std::mt19937_64 &random_state);
-        arma::rowvec single_draw();
-        arma::mat draw(unsigned int num_samples);
+        arma::rowvec single_sample();
+        arma::mat sample(unsigned int num_samples);
     private:
         std::vector<std::gamma_distribution<double>> gamma_dists_;
         unsigned int num_components_;

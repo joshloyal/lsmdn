@@ -6,24 +6,111 @@
 
 using namespace Rcpp;
 
-// fit_latent_space_network
-Rcpp::List fit_latent_space_network(const arma::cube& Y, const int num_dimensions, const int num_iter, const int num_burn_in, const unsigned int seed);
-RcppExport SEXP _lsmdn_fit_latent_space_network(SEXP YSEXP, SEXP num_dimensionsSEXP, SEXP num_iterSEXP, SEXP num_burn_inSEXP, SEXP seedSEXP) {
+// procrustes
+arma::mat procrustes(const arma::mat& X, const arma::mat& Y);
+RcppExport SEXP _lsmdn_procrustes(SEXP XSEXP, SEXP YSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const arma::mat& >::type X(XSEXP);
+    Rcpp::traits::input_parameter< const arma::mat& >::type Y(YSEXP);
+    rcpp_result_gen = Rcpp::wrap(procrustes(X, Y));
+    return rcpp_result_gen;
+END_RCPP
+}
+// rinvgamma
+arma::vec rinvgamma(const int num_samples, const double shape, const double scale, const unsigned int seed);
+RcppExport SEXP _lsmdn_rinvgamma(SEXP num_samplesSEXP, SEXP shapeSEXP, SEXP scaleSEXP, SEXP seedSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const int >::type num_samples(num_samplesSEXP);
+    Rcpp::traits::input_parameter< const double >::type shape(shapeSEXP);
+    Rcpp::traits::input_parameter< const double >::type scale(scaleSEXP);
+    Rcpp::traits::input_parameter< const unsigned int >::type seed(seedSEXP);
+    rcpp_result_gen = Rcpp::wrap(rinvgamma(num_samples, shape, scale, seed));
+    return rcpp_result_gen;
+END_RCPP
+}
+// rdirichlet
+arma::mat rdirichlet(const int num_samples, arma::vec& alphas, const unsigned int seed);
+RcppExport SEXP _lsmdn_rdirichlet(SEXP num_samplesSEXP, SEXP alphasSEXP, SEXP seedSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const int >::type num_samples(num_samplesSEXP);
+    Rcpp::traits::input_parameter< arma::vec& >::type alphas(alphasSEXP);
+    Rcpp::traits::input_parameter< const unsigned int >::type seed(seedSEXP);
+    rcpp_result_gen = Rcpp::wrap(rdirichlet(num_samples, alphas, seed));
+    return rcpp_result_gen;
+END_RCPP
+}
+// lsmdn_log_likelihood
+double lsmdn_log_likelihood(const arma::cube& Y, const arma::cube& X, const arma::vec& radii, double beta_in, double beta_out);
+RcppExport SEXP _lsmdn_lsmdn_log_likelihood(SEXP YSEXP, SEXP XSEXP, SEXP radiiSEXP, SEXP beta_inSEXP, SEXP beta_outSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< const arma::cube& >::type Y(YSEXP);
-    Rcpp::traits::input_parameter< const int >::type num_dimensions(num_dimensionsSEXP);
-    Rcpp::traits::input_parameter< const int >::type num_iter(num_iterSEXP);
+    Rcpp::traits::input_parameter< const arma::cube& >::type X(XSEXP);
+    Rcpp::traits::input_parameter< const arma::vec& >::type radii(radiiSEXP);
+    Rcpp::traits::input_parameter< double >::type beta_in(beta_inSEXP);
+    Rcpp::traits::input_parameter< double >::type beta_out(beta_outSEXP);
+    rcpp_result_gen = Rcpp::wrap(lsmdn_log_likelihood(Y, X, radii, beta_in, beta_out));
+    return rcpp_result_gen;
+END_RCPP
+}
+// lsmdn_grad_beta
+arma::vec lsmdn_grad_beta(const arma::cube& Y, const arma::cube& X, const arma::vec& radii, double beta_in, double beta_out);
+RcppExport SEXP _lsmdn_lsmdn_grad_beta(SEXP YSEXP, SEXP XSEXP, SEXP radiiSEXP, SEXP beta_inSEXP, SEXP beta_outSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const arma::cube& >::type Y(YSEXP);
+    Rcpp::traits::input_parameter< const arma::cube& >::type X(XSEXP);
+    Rcpp::traits::input_parameter< const arma::vec& >::type radii(radiiSEXP);
+    Rcpp::traits::input_parameter< double >::type beta_in(beta_inSEXP);
+    Rcpp::traits::input_parameter< double >::type beta_out(beta_outSEXP);
+    rcpp_result_gen = Rcpp::wrap(lsmdn_grad_beta(Y, X, radii, beta_in, beta_out));
+    return rcpp_result_gen;
+END_RCPP
+}
+// fit_latent_space_network
+Rcpp::List fit_latent_space_network(const arma::cube& Y, const arma::cube& X_init, const arma::vec& radii_init, const double beta_in, const double beta_out, const double nu_in, const double xi_in, const double nu_out, const double xi_out, const double tau_sq, const double tau_shape, const double tau_scale, const double sigma_sq, const double sigma_shape, const double sigma_scale, const int num_samples, const int num_burn_in, const unsigned int seed);
+RcppExport SEXP _lsmdn_fit_latent_space_network(SEXP YSEXP, SEXP X_initSEXP, SEXP radii_initSEXP, SEXP beta_inSEXP, SEXP beta_outSEXP, SEXP nu_inSEXP, SEXP xi_inSEXP, SEXP nu_outSEXP, SEXP xi_outSEXP, SEXP tau_sqSEXP, SEXP tau_shapeSEXP, SEXP tau_scaleSEXP, SEXP sigma_sqSEXP, SEXP sigma_shapeSEXP, SEXP sigma_scaleSEXP, SEXP num_samplesSEXP, SEXP num_burn_inSEXP, SEXP seedSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const arma::cube& >::type Y(YSEXP);
+    Rcpp::traits::input_parameter< const arma::cube& >::type X_init(X_initSEXP);
+    Rcpp::traits::input_parameter< const arma::vec& >::type radii_init(radii_initSEXP);
+    Rcpp::traits::input_parameter< const double >::type beta_in(beta_inSEXP);
+    Rcpp::traits::input_parameter< const double >::type beta_out(beta_outSEXP);
+    Rcpp::traits::input_parameter< const double >::type nu_in(nu_inSEXP);
+    Rcpp::traits::input_parameter< const double >::type xi_in(xi_inSEXP);
+    Rcpp::traits::input_parameter< const double >::type nu_out(nu_outSEXP);
+    Rcpp::traits::input_parameter< const double >::type xi_out(xi_outSEXP);
+    Rcpp::traits::input_parameter< const double >::type tau_sq(tau_sqSEXP);
+    Rcpp::traits::input_parameter< const double >::type tau_shape(tau_shapeSEXP);
+    Rcpp::traits::input_parameter< const double >::type tau_scale(tau_scaleSEXP);
+    Rcpp::traits::input_parameter< const double >::type sigma_sq(sigma_sqSEXP);
+    Rcpp::traits::input_parameter< const double >::type sigma_shape(sigma_shapeSEXP);
+    Rcpp::traits::input_parameter< const double >::type sigma_scale(sigma_scaleSEXP);
+    Rcpp::traits::input_parameter< const int >::type num_samples(num_samplesSEXP);
     Rcpp::traits::input_parameter< const int >::type num_burn_in(num_burn_inSEXP);
     Rcpp::traits::input_parameter< const unsigned int >::type seed(seedSEXP);
-    rcpp_result_gen = Rcpp::wrap(fit_latent_space_network(Y, num_dimensions, num_iter, num_burn_in, seed));
+    rcpp_result_gen = Rcpp::wrap(fit_latent_space_network(Y, X_init, radii_init, beta_in, beta_out, nu_in, xi_in, nu_out, xi_out, tau_sq, tau_shape, tau_scale, sigma_sq, sigma_shape, sigma_scale, num_samples, num_burn_in, seed));
     return rcpp_result_gen;
 END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_lsmdn_fit_latent_space_network", (DL_FUNC) &_lsmdn_fit_latent_space_network, 5},
+    {"_lsmdn_procrustes", (DL_FUNC) &_lsmdn_procrustes, 2},
+    {"_lsmdn_rinvgamma", (DL_FUNC) &_lsmdn_rinvgamma, 4},
+    {"_lsmdn_rdirichlet", (DL_FUNC) &_lsmdn_rdirichlet, 3},
+    {"_lsmdn_lsmdn_log_likelihood", (DL_FUNC) &_lsmdn_lsmdn_log_likelihood, 5},
+    {"_lsmdn_lsmdn_grad_beta", (DL_FUNC) &_lsmdn_lsmdn_grad_beta, 5},
+    {"_lsmdn_fit_latent_space_network", (DL_FUNC) &_lsmdn_fit_latent_space_network, 18},
     {NULL, NULL, 0}
 };
 
