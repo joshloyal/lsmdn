@@ -61,7 +61,7 @@ namespace lsmdn {
         return samples;
     }
 
-    DirichletSampler::DirichletSampler(arma::vec &alphas,
+    DirichletSampler::DirichletSampler(arma::rowvec &alphas,
                                        std::mt19937_64 &random_state) :
             num_components_(alphas.n_elem),
             random_state_(random_state) {

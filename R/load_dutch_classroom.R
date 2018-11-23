@@ -1,8 +1,6 @@
-context("test-lsmdn-fit")
-library(xergm)
-library(abind)
-library(zeallot)
-
+#' Dutch Classrooms dataset
+#' 
+#' @export
 load_dutch_classroom <- function() {
     data(knecht)
     
@@ -14,8 +12,3 @@ load_dutch_classroom <- function() {
     
     abind(Y1, Y2, Y3, Y4, along = 3)
 }
-
-test_that("Model fit", {
-    Y <- load_dutch_classroom()
-    lsmdn(Y)
-})

@@ -2,6 +2,8 @@
 
 #include "distributions.h"
 #include "gibbs_sampler.h"
+#include "procrustes.h"
+#include "linalg.h"
 
 namespace  lsmdn {
 
@@ -25,6 +27,7 @@ namespace  lsmdn {
             const unsigned int num_burn_in,
             const double step_size_x,
             const double step_size_beta,
+            const double step_size_radii,
             unsigned int seed) :
             Y_(Y),
             num_samples_(num_samples),
@@ -50,14 +53,12 @@ namespace  lsmdn {
             rnorm_(0.0, 1.0, random_state_),
             step_size_x_(step_size_x),
             step_size_beta_(step_size_beta),
+            step_size_radii_(step_size_radii),
             sample_index_(0),
             X_acc_rate_(num_nodes_, num_time_steps_, arma::fill::zeros),
             beta_in_acc_rate_(0),
             beta_out_acc_rate_(0),
-            radii_acc_rate_(num_nodes_, arma::fill::zeros),
-            sigma_acc_rate_(0),
-            tau_acc_rate_(0) {
-
+            radii_acc_rate_(0) {
         tau_sq_(0) = tau_sq;
         sigma_sq_(0) = sigma_sq;
         beta_in_(0) = beta_in;
@@ -167,20 +168,27 @@ namespace  lsmdn {
             } // loop i
         } // loop t
 
-        // center each time-slice
-        for (int t = 0; t < num_time_steps_; ++t) {
-            X_new.slice(t).each_row() -= arma::mean(X_new.slice(t));
+        // center across nodes and time steps
+        //for (int t = 0; t < num_time_steps_; ++t) {
+        //    X_new.slice(t).each_row() -= arma::mean(X_new.slice(t));
+        //}
+        // center across nodes and time steps
+        arma::cube col_means =
+            arma::sum(arma::sum(X_new, 0), 2) / (num_time_steps_ * num_nodes_);
+        for (unsigned int t = 0; t < num_time_steps_; ++t) {
+            X_new.slice(t).each_row() -= col_means.slice(0);
         }
 
         // procrustes transformation if we are past the burn-in period
-        //if (sample_index_ >= num_burn_in_) {
-        //    arma::mat X0 = flatten_cube(X_.at(num_burn_in_));
-        //    arma::mat Xl = flatten_cube(X_new);
-        //    arma::mat X_proc = procrustes(X0, Xl);
-        //    for(unsigned int t = 0; t < num_time_steps_; ++t) {
-        //        X_new.slice(t) = X_proc.rows(t * num_nodes_, (t + 1) * num_nodes_ - 1);
-        //    }
-        //}
+        if (sample_index_ > num_burn_in_) {
+            arma::mat X0 = flatten_cube(X_.at(num_burn_in_));
+            arma::mat Xl = flatten_cube(X_new);
+            arma::mat X_proc = procrustes(X0, Xl);
+            for(unsigned int t = 0; t < num_time_steps_; ++t) {
+                X_new.slice(t) = X_proc.rows(
+                    t * num_nodes_, (t + 1) * num_nodes_ - 1);
+            }
+        }
 
         return X_new;
     }
@@ -244,7 +252,7 @@ namespace  lsmdn {
 
         // current parameter values
         arma::cube X = X_.at(sample_index_);
-        double beta_in = beta_out_(sample_index_);
+        double beta_in = beta_in_(sample_index_);
         arma::rowvec radii = radii_.row(sample_index_ - 1);
 
         // random walk metropolis
@@ -343,7 +351,75 @@ namespace  lsmdn {
         return rinvgamma.single_sample();
     }
 
-    arma::vec DynamicLatentSpaceNetworkSampler::sample_radii() {
+    arma::rowvec DynamicLatentSpaceNetworkSampler::sample_radii() {
+        // previous radii
+        arma::rowvec radii_prev = radii_.row(sample_index_ - 1);
+
+        // extract current parameters of the model
+        arma::cube X = X_.at(sample_index_);
+        double beta_in = beta_in_(sample_index_);
+        double beta_out = beta_out_(sample_index_);
+
+        // distances and etas
+        double dij;
+        double eta_prev;
+        double eta_prop;
+
+        // dirichlet proposal
+        arma::rowvec alphas = step_size_radii_ * radii_prev;
+        DirichletSampler rdirichlet(alphas, random_state_);
+        arma::rowvec radii_prop = rdirichlet.single_sample();
+
+        // likelihood ratio
+        double accept_ratio = 0.;
+        for(unsigned int t = 0; t < num_time_steps_; ++t) {
+            for(unsigned int i = 0; i < num_nodes_; ++i) {
+                for(unsigned int j = 0; j < num_nodes_; ++j) {
+                    if(i != j) {
+                        dij = arma::norm(
+                            X.slice(t).row(i) - X.slice(t).row(j), 2);
+                        eta_prev = beta_in * (1 - dij / radii_prev(j)) +
+                            beta_out * (1 - dij / radii_prev(i));
+                        eta_prop = beta_in * (1 - dij / radii_prop(j)) +
+                            beta_out * (1 - dij / radii_prop(i));
+
+                        accept_ratio += Y_(i, j, t) * (eta_prop - eta_prev);
+                        accept_ratio += std::log(1 + std::exp(eta_prev)) -
+                            std::log(1 + std::exp(eta_prop));
+                    }
+                }
+            }
+        }
+
+        // transition equation ratio
+        for(unsigned int i = 0; i < num_nodes_; ++i) {
+            accept_ratio +=
+                (step_size_radii_ * radii_prop(i) - 1) * std::log(radii_prev(i)) -
+                (step_size_radii_ * radii_prev(i) - 1) * std::log(radii_prop(i));
+
+            // first-two terms taylor expansion (why use this?)
+            //accept_ratio -=
+            //    (step_size_radii_ * radii_prop(i) - 0.5) *
+            //        std::log(step_size_radii_ * radii_prop(i)) -
+            //        step_size_radii_ * radii_prop(i);
+            //accept_ratio +=
+            //    (step_size_radii_ * radii_prev(i) - 0.5) *
+            //        std::log(step_size_radii_ * radii_prev(i)) -
+            //        step_size_radii_ * radii_prev(i);
+
+            // use actual log-gamma function for normalizing constant
+            accept_ratio += std::lgamma(step_size_radii_ * radii_prev(i)) -
+                std::lgamma(step_size_radii_ * radii_prop(i));
+        }
+
+        // accept / reject
+        double u = runif_.single_sample();
+        if(std::log(u) < accept_ratio) {
+            radii_acc_rate_ += 1;
+            return radii_prop;
+        } else {
+            return radii_prev;
+        }
     }
 
     ParamSamples DynamicLatentSpaceNetworkSampler::sample() {
@@ -362,6 +438,7 @@ namespace  lsmdn {
             sigma_sq_(sample_index_) = sample_sigma_sq();
 
             // radii metropolis-hastings with a nonsymmetric dirichlet proposal
+            radii_.row(sample_index_) = sample_radii();
         }
 
         return { tau_sq_, sigma_sq_, beta_in_, beta_out_, radii_, X_ };

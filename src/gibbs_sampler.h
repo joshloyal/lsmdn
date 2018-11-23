@@ -40,6 +40,7 @@ public:
                                      const unsigned int num_burn_in,
                                      const double step_size_x,
                                      const double step_size_beta,
+                                     const double step_size_radii,
                                      unsigned int seed);
 
     arma::cube sample_latent_positions();
@@ -47,7 +48,7 @@ public:
     double sample_beta_out();
     double sample_tau_sq();
     double sample_sigma_sq();
-    arma::vec sample_radii();
+    arma::rowvec sample_radii();
     ParamSamples sample();
 
 private:
@@ -88,6 +89,7 @@ private:
     // step sizes for random walk metropolis
     double step_size_x_;
     double step_size_beta_;
+    double step_size_radii_;
 
     // counters
     unsigned int sample_index_;
@@ -96,10 +98,7 @@ private:
     arma::mat X_acc_rate_;
     double beta_in_acc_rate_;
     double beta_out_acc_rate_;
-    arma::vec radii_acc_rate_;
-    double sigma_acc_rate_;
-    double tau_acc_rate_;
-
+    double radii_acc_rate_;
 };
 
 

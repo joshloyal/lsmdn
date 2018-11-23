@@ -10,7 +10,9 @@ License: MIT + file LICENSE
 Imports: 
     Rcpp (>= 0.12.17),
     igraph,
-    zeallot
+    zeallot,
+    xergm,
+    abind
 LinkingTo: Rcpp, RcppArmadillo
 RoxygenNote: 6.1.0
 Suggests: 

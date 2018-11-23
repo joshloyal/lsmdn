@@ -51,7 +51,7 @@ namespace lsmdn {
     // y_i / sum(y_i)
     class DirichletSampler {
     public:
-        DirichletSampler(arma::vec &alphas,
+        DirichletSampler(arma::rowvec &alphas,
                          std::mt19937_64 &random_state);
         arma::rowvec single_sample();
         arma::mat sample(unsigned int num_samples);

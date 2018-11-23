@@ -43,7 +43,8 @@ arma::mat rdirichlet(const int num_samples,
                      arma::vec &alphas,
                      const unsigned int seed=123) {
     std::mt19937_64 random_state(seed);
-    auto sampler = lsmdn::DirichletSampler(alphas, random_state);
+    arma::rowvec d_alphas = alphas.t();
+    auto sampler = lsmdn::DirichletSampler(d_alphas, random_state);
 
     return sampler.sample(num_samples);
 }
@@ -96,12 +97,14 @@ Rcpp::List fit_latent_space_network(const arma::cube &Y,
                                     const int num_burn_in,
                                     const double step_size_x,
                                     const double step_size_beta,
+                                    const double step_size_radii,
                                     const unsigned int seed) {
 
     lsmdn::DynamicLatentSpaceNetworkSampler model(
         Y, X_init, radii_init, beta_in, beta_out, nu_in, xi_in, nu_out, xi_out,
         tau_sq, tau_shape, tau_scale, sigma_sq, sigma_shape, sigma_scale,
-        num_samples, num_burn_in, step_size_x, step_size_beta, seed);
+        num_samples, num_burn_in, step_size_x, step_size_beta, step_size_radii,
+        seed);
 
     lsmdn::ParamSamples samples = model.sample();
 
