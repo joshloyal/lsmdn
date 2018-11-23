@@ -38,6 +38,7 @@ namespace lsmdn {
                             const double scale,
                             std::mt19937_64 &random_state);
 
+        double single_sample();
         arma::vec sample(unsigned int num_samples);
     private:
         std::gamma_distribution<double> gamma_dist_;

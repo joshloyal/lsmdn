@@ -6,8 +6,10 @@
 #' @export
 lsmdn <- function(Y, 
                   num_dimensions = 2, 
-                  num_iter = 10000, 
-                  num_burn_in = 1000, 
+                  num_iter = 100000, 
+                  num_burn_in = 15000, 
+                  step_size_x = 0.0075,
+                  step_size_beta = 0.1,
                   seed = 42) {
     
     params <- initialize_params(Y)
@@ -17,7 +19,7 @@ lsmdn <- function(Y,
         params$nu_in, params$xi_in, params$nu_out, params$xi_out,
         params$tau_sq, params$tau_shape, params$tau_scale, params$sigma_sq,
         params$sigma_shape, params$sigma_scale,
-        num_iter, num_burn_in, seed)
+        num_iter, num_burn_in, step_size_x, step_size_beta, seed)
     
     out
 }

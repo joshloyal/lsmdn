@@ -9,12 +9,12 @@
 namespace lsmdn {
 
 
-struct ModelParams {
+struct ParamSamples {
     arma::vec tau_sq;           // variance of initial latent positions
     arma::vec sigma_sq;         // variance of transition equations
     arma::vec beta_in;          // popularity coefficient
     arma::vec beta_out;         // social activity coefficient
-    arma::mat radius;           // social reach
+    arma::mat radii;           // social reach
     std::vector<arma::cube> X;  // latent positions
 };
 
@@ -38,9 +38,17 @@ public:
                                      const double sigma_scale,
                                      const unsigned int num_samples,
                                      const unsigned int num_burn_in,
+                                     const double step_size_x,
+                                     const double step_size_beta,
                                      unsigned int seed);
+
     arma::cube sample_latent_positions();
-    void sample();
+    double sample_beta_in();
+    double sample_beta_out();
+    double sample_tau_sq();
+    double sample_sigma_sq();
+    arma::vec sample_radii();
+    ParamSamples sample();
 
 private:
     const arma::cube &Y_;        // observed adjacency matrix per time point
@@ -78,7 +86,8 @@ private:
     NormalSampler rnorm_;
 
     // step sizes for random walk metropolis
-    double sigma_x_;
+    double step_size_x_;
+    double step_size_beta_;
 
     // counters
     unsigned int sample_index_;

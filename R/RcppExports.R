@@ -47,7 +47,7 @@ lsmdn_grad_beta <- function(Y, X, radii, beta_in, beta_out) {
 #'  shape (n_time_points, n_nodes, n_nodes)
 #' @return
 #' @export
-fit_latent_space_network <- function(Y, X_init, radii_init, beta_in, beta_out, nu_in, xi_in, nu_out, xi_out, tau_sq, tau_shape, tau_scale, sigma_sq, sigma_shape, sigma_scale, num_samples, num_burn_in, seed) {
-    .Call(`_lsmdn_fit_latent_space_network`, Y, X_init, radii_init, beta_in, beta_out, nu_in, xi_in, nu_out, xi_out, tau_sq, tau_shape, tau_scale, sigma_sq, sigma_shape, sigma_scale, num_samples, num_burn_in, seed)
+fit_latent_space_network <- function(Y, X_init, radii_init, beta_in, beta_out, nu_in, xi_in, nu_out, xi_out, tau_sq, tau_shape, tau_scale, sigma_sq, sigma_shape, sigma_scale, num_samples, num_burn_in, step_size_x, step_size_beta, seed) {
+    .Call(`_lsmdn_fit_latent_space_network`, Y, X_init, radii_init, beta_in, beta_out, nu_in, xi_in, nu_out, xi_out, tau_sq, tau_shape, tau_scale, sigma_sq, sigma_shape, sigma_scale, num_samples, num_burn_in, step_size_x, step_size_beta, seed)
 }
 

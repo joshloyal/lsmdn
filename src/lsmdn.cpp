@@ -94,19 +94,23 @@ Rcpp::List fit_latent_space_network(const arma::cube &Y,
                                     const double sigma_scale,
                                     const int num_samples,
                                     const int num_burn_in,
+                                    const double step_size_x,
+                                    const double step_size_beta,
                                     const unsigned int seed) {
 
     lsmdn::DynamicLatentSpaceNetworkSampler model(
         Y, X_init, radii_init, beta_in, beta_out, nu_in, xi_in, nu_out, xi_out,
         tau_sq, tau_shape, tau_scale, sigma_sq, sigma_shape, sigma_scale,
-        num_samples, num_burn_in, seed);
+        num_samples, num_burn_in, step_size_x, step_size_beta, seed);
 
-    //auto samples = model.sample(num_samples, num_burn_in);
-
+    lsmdn::ParamSamples samples = model.sample();
 
     return Rcpp::List::create(
-        Rcpp::Named("out") = beta_in
-    //    Rcpp::Named("out") = gammas,
-    //    Rcpp::Named("dir") = dirichlets
+        Rcpp::Named("X") = samples.X,
+        Rcpp::Named("tau_sq") = samples.tau_sq,
+        Rcpp::Named("sigma_sq") = samples.sigma_sq,
+        Rcpp::Named("beta_in") = samples.beta_in,
+        Rcpp::Named("beta_out") = samples.beta_out,
+        Rcpp::Named("radii") = samples.radii
     );
 }

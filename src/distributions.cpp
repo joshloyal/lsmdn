@@ -48,10 +48,14 @@ namespace lsmdn {
             gamma_dist_(shape, 1.0/scale),
             random_state_(random_state) {}
 
+    double InverseGammaSampler::single_sample() {
+        return 1.0 / gamma_dist_(random_state_);
+    }
+
     arma::vec InverseGammaSampler::sample(unsigned int num_samples) {
         arma::vec samples(num_samples);
         for (int i = 0; i < num_samples; ++i) {
-            samples(i) = 1.0 / gamma_dist_(random_state_);
+            samples(i) = single_sample();
         }
 
         return samples;
