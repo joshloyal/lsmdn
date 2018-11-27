@@ -7,8 +7,46 @@
 
 namespace  lsmdn {
 
+    double tune_step_size(double step_size, double acc_rate) {
+        if(acc_rate < 0.001) {
+            step_size *= 0.1;
+        } else if (acc_rate < 0.05) {
+            step_size *= 0.5;
+        } else if (acc_rate < 0.2) {
+            step_size *= 0.9;
+        } else if (acc_rate > 0.95) {
+            step_size *= 10.0;
+        } else if (acc_rate > 0.75) {
+            step_size *= 2.0;
+        } else if (acc_rate > 0.5) {
+            step_size *= 1.1;
+        }
+
+        return step_size;
+    }
+
+    // Radii small step sizes => smaller acceptance
+    double tune_step_size_radii(double step_size, double acc_rate) {
+        if(acc_rate < 0.001) {
+            step_size *= 10.0;
+        } else if (acc_rate < 0.05) {
+            step_size *= 2.0;
+        } else if (acc_rate < 0.2) {
+            step_size *= 1.1;
+        } else if (acc_rate > 0.95) {
+            step_size *= 0.1;
+        } else if (acc_rate > 0.75) {
+            step_size *= 0.5;
+        } else if (acc_rate > 0.5) {
+            step_size *= 0.9;
+        }
+
+        return step_size;
+    }
+
     DynamicLatentSpaceNetworkSampler::DynamicLatentSpaceNetworkSampler(
-            const arma::cube &Y,
+            arma::cube &Y,
+            const arma::mat &Y_miss,
             const arma::cube &X_init,
             const arma::vec &radii_init,
             const double beta_in,
@@ -25,10 +63,13 @@ namespace  lsmdn {
             const double sigma_scale,
             const unsigned int num_samples,
             const unsigned int num_burn_in,
+            bool tune,
+            const unsigned int tune_interval,
             const double step_size_x,
             const double step_size_beta,
             const double step_size_radii,
-            unsigned int seed) :
+            unsigned int seed,
+            bool debug) :
             Y_(Y),
             num_samples_(num_samples),
             num_burn_in_(num_burn_in),
@@ -51,32 +92,49 @@ namespace  lsmdn {
             random_state_(seed),
             runif_(0.0, 1.0, random_state_),
             rnorm_(0.0, 1.0, random_state_),
+            tune_(tune),
+            tune_interval_(tune_interval),
+            steps_until_tune_(tune_interval),
             step_size_x_(step_size_x),
             step_size_beta_(step_size_beta),
             step_size_radii_(step_size_radii),
-            sample_index_(0),
             X_acc_rate_(num_nodes_, num_time_steps_, arma::fill::zeros),
             beta_in_acc_rate_(0),
             beta_out_acc_rate_(0),
-            radii_acc_rate_(0) {
+            radii_acc_rate_(0),
+            debug_(debug),
+            rnorms_X_(num_nodes_ * num_time_steps_, num_dimensions_,
+                     arma::fill::zeros),
+            runifs_X_(num_nodes_ * num_time_steps_, arma::fill::zeros),
+            accept_ratio_X_(num_nodes_ * num_time_steps_, arma::fill::zeros) {
+
+        // set initial values
         tau_sq_(0) = tau_sq;
         sigma_sq_(0) = sigma_sq;
         beta_in_(0) = beta_in;
         beta_out_(0) = beta_out;
         radii_.row(0) = radii_init.t();
-
         X_.resize(num_samples_);
         X_.at(0) = arma::cube(X_init);
+
+        // determine indices of missing vertices
+        for(unsigned int t = 0; t < num_time_steps_; ++t) {
+            Y_miss_.push_back(arma::find(Y_miss.row(t) != 0));
+        }
     }
 
-    arma::cube DynamicLatentSpaceNetworkSampler::sample_latent_positions() {
+    arma::cube DynamicLatentSpaceNetworkSampler::sample_latent_positions(
+            unsigned int sample_index) {
         // samples latent positions for each time slice using a
         // random walk metropolis algorithm
-        arma::cube X_new(X_.at(sample_index_ - 1)); // this should copy
+        arma::cube X_new(X_.at(sample_index - 1)); // this should copy
 
         // previous and proposed latent position for node i
         arma::vec Xit_prev;
         arma::vec Xit_prop;
+
+        // store normal draw for the random walk
+        arma::vec epsilon;
 
         // distance between node i and j in latent space
         double dij_prev;
@@ -84,22 +142,28 @@ namespace  lsmdn {
 
         // parameters from previous sample.
         // this is the first step in the metropolis-in-gibbs algorithm
-        double beta_in = beta_in_(sample_index_ - 1);
-        double beta_out = beta_out_(sample_index_ - 1);
-        arma::rowvec radii = radii_.row(sample_index_ - 1);
-        double tau_sq = tau_sq_(sample_index_ - 1);
-        double sigma_sq = sigma_sq_(sample_index_ - 1);
+        double beta_in = beta_in_(sample_index - 1);
+        double beta_out = beta_out_(sample_index - 1);
+        arma::rowvec radii = radii_.row(sample_index - 1);
+        double tau_sq = tau_sq_(sample_index - 1);
+        double sigma_sq = sigma_sq_(sample_index - 1);
 
         // random walk metropolis sampling
-        double accept_ratio = 0;
+        double accept_ratio = 0.;
         for(unsigned int t = 0; t < num_time_steps_; ++t) {
             for(unsigned int i = 0; i < num_nodes_; ++i) {
                 // random walk proposal
-                Xit_prev = X_.at(sample_index_ - 1).slice(t).row(i).t();
-                Xit_prop = Xit_prev + step_size_x_ * rnorm_.sample(2);
+                Xit_prev = X_.at(sample_index - 1).slice(t).row(i).t();
+                epsilon = rnorm_.sample(2);
+                Xit_prop = Xit_prev + step_size_x_ * epsilon;
+
+                // store random state for debugging
+                if(debug_) {
+                    rnorms_X_.row(t * num_nodes_ + i) = epsilon.t();
+                }
 
                 // calculate acceptance ratio (pi(Xit_prop)/pi(Xit_old))
-                accept_ratio = 0;
+                accept_ratio = 0.;
 
                 // p_ij * p_ji term (log(p_ij) + log(p_ji))
                 for(unsigned int j = 0; j < num_nodes_; ++j) {
@@ -110,10 +174,10 @@ namespace  lsmdn {
                             Xit_prev - X_new.slice(t).row(j).t(), 2);
 
                         accept_ratio += (dij_prev - dij_prop) *
-                            (Y_(j, i, t) *
+                            ((Y_(j, i, t) *
                                 (beta_in / radii(i) + beta_out / radii(j))) +
-                            (Y_(i, j, t) *
-                                (beta_in / radii(j) + beta_out / radii(i)));
+                             (Y_(i, j, t) *
+                                (beta_in / radii(j) + beta_out / radii(i))));
 
                         accept_ratio += std::log(
                             1 + std::exp(beta_in * (1 - dij_prev / radii(i)) +
@@ -159,8 +223,18 @@ namespace  lsmdn {
 
                 }
 
+                if (debug_) {
+                    accept_ratio_X_(t * num_nodes_ + i) = accept_ratio;
+                }
+
                 // accept / reject
                 double u = runif_.single_sample();
+
+                // store uniform draw for testing
+                if (debug_) {
+                    runifs_X_(t * num_nodes_ + i) = u;
+                }
+
                 if(std::log(u) < accept_ratio) {
                     X_new.slice(t).row(i) = Xit_prop.t();
                     X_acc_rate_(i, t) += 1;
@@ -180,26 +254,27 @@ namespace  lsmdn {
         }
 
         // procrustes transformation if we are past the burn-in period
-        if (sample_index_ > num_burn_in_) {
+        if (sample_index > num_burn_in_) {
             arma::mat X0 = flatten_cube(X_.at(num_burn_in_));
             arma::mat Xl = flatten_cube(X_new);
             arma::mat X_proc = procrustes(X0, Xl);
             for(unsigned int t = 0; t < num_time_steps_; ++t) {
                 X_new.slice(t) = X_proc.rows(
-                    t * num_nodes_, (t + 1) * num_nodes_ - 1);
+                    t * num_nodes_, ((t + 1) * num_nodes_) - 1);
             }
         }
 
         return X_new;
     }
 
-    double DynamicLatentSpaceNetworkSampler::sample_beta_in() {
-        double beta_in_prev = beta_in_(sample_index_ - 1);
+    double DynamicLatentSpaceNetworkSampler::sample_beta_in(
+            unsigned int sample_index) {
+        double beta_in_prev = beta_in_(sample_index - 1);
 
         // current parameter values
-        arma::cube X = X_.at(sample_index_);
-        double beta_out = beta_out_(sample_index_ - 1);
-        arma::rowvec radii = radii_.row(sample_index_ - 1);
+        arma::cube X = X_.at(sample_index);
+        double beta_out = beta_out_(sample_index - 1);
+        arma::rowvec radii = radii_.row(sample_index - 1);
 
         // random walk metropolis
         double beta_in_prop =
@@ -223,9 +298,9 @@ namespace  lsmdn {
                         eta_prev = beta_in_prev * (1 - dij / radii(j)) +
                             beta_out * (1 - dij / radii(i));
 
-                        accept_ratio += Y_(i, j, t) *
+                        accept_ratio += (Y_(i, j, t) *
                             (beta_in_prop - beta_in_prev) *
-                                (1 - dij / radii(j)) -
+                                (1 - dij / radii(j))) -
                             std::log(1 + std::exp(eta_prop)) +
                             std::log(1 + std::exp(eta_prev));
                     }
@@ -234,8 +309,8 @@ namespace  lsmdn {
         }
 
         // prior ratio
-        accept_ratio -= std::pow(beta_in_prop - nu_in_, 2) / (2 * xi_in_);
-        accept_ratio += std::pow(beta_in_prev - nu_in_, 2) / (2 * xi_in_);
+        accept_ratio -= std::pow(beta_in_prop - nu_in_, 2) / (2. * xi_in_);
+        accept_ratio += std::pow(beta_in_prev - nu_in_, 2) / (2. * xi_in_);
 
         // accept / reject
         double u = runif_.single_sample();
@@ -247,13 +322,14 @@ namespace  lsmdn {
         }
     }
 
-    double DynamicLatentSpaceNetworkSampler::sample_beta_out() {
-        double beta_out_prev = beta_out_(sample_index_ - 1);
+    double DynamicLatentSpaceNetworkSampler::sample_beta_out(
+            unsigned int sample_index) {
+        double beta_out_prev = beta_out_(sample_index - 1);
 
         // current parameter values
-        arma::cube X = X_.at(sample_index_);
-        double beta_in = beta_in_(sample_index_);
-        arma::rowvec radii = radii_.row(sample_index_ - 1);
+        arma::cube X = X_.at(sample_index);
+        double beta_in = beta_in_(sample_index);
+        arma::rowvec radii = radii_.row(sample_index - 1);
 
         // random walk metropolis
         double beta_out_prop =
@@ -277,9 +353,9 @@ namespace  lsmdn {
                         eta_prev = beta_in * (1 - dij / radii(j)) +
                             beta_out_prev * (1 - dij / radii(i));
 
-                        accept_ratio += Y_(i, j, t) *
+                        accept_ratio += (Y_(i, j, t) *
                             (beta_out_prop - beta_out_prev) *
-                                (1 - dij / radii(i)) -
+                                (1 - dij / radii(i))) -
                             std::log(1 + std::exp(eta_prop)) +
                             std::log(1 + std::exp(eta_prev));
                     }
@@ -288,8 +364,8 @@ namespace  lsmdn {
         }
 
         // prior ratio
-        accept_ratio -= std::pow(beta_out_prop - nu_out_, 2) / (2 * xi_out_);
-        accept_ratio += std::pow(beta_out_prev - nu_out_, 2) / (2 * xi_out_);
+        accept_ratio -= std::pow(beta_out_prop - nu_out_, 2) / (2. * xi_out_);
+        accept_ratio += std::pow(beta_out_prev - nu_out_, 2) / (2. * xi_out_);
 
         // accept / reject
         double u = runif_.single_sample();
@@ -301,8 +377,9 @@ namespace  lsmdn {
         }
     }
 
-    double DynamicLatentSpaceNetworkSampler::sample_tau_sq() {
-        arma::mat X0 = X_.at(sample_index_).slice(0);
+    double DynamicLatentSpaceNetworkSampler::sample_tau_sq(
+            unsigned int sample_index) {
+        arma::mat X0 = X_.at(sample_index).slice(0);
 
         // calculate scale of the inverse gamma distribution
         double invgamma_scale =
@@ -323,8 +400,9 @@ namespace  lsmdn {
         return rinvgamma.single_sample();
     }
 
-    double DynamicLatentSpaceNetworkSampler::sample_sigma_sq() {
-        arma::cube X = X_.at(sample_index_);
+    double DynamicLatentSpaceNetworkSampler::sample_sigma_sq(
+            unsigned int sample_index) {
+        arma::cube X = X_.at(sample_index);
 
         // calculate the scale of the inverse gamma distribution
         double invgamma_scale =
@@ -351,14 +429,15 @@ namespace  lsmdn {
         return rinvgamma.single_sample();
     }
 
-    arma::rowvec DynamicLatentSpaceNetworkSampler::sample_radii() {
+    arma::rowvec DynamicLatentSpaceNetworkSampler::sample_radii(
+            unsigned int sample_index) {
         // previous radii
-        arma::rowvec radii_prev = radii_.row(sample_index_ - 1);
+        arma::rowvec radii_prev = radii_.row(sample_index - 1);
 
         // extract current parameters of the model
-        arma::cube X = X_.at(sample_index_);
-        double beta_in = beta_in_(sample_index_);
-        double beta_out = beta_out_(sample_index_);
+        arma::cube X = X_.at(sample_index);
+        double beta_in = beta_in_(sample_index);
+        double beta_out = beta_out_(sample_index);
 
         // distances and etas
         double dij;
@@ -422,23 +501,97 @@ namespace  lsmdn {
         }
     }
 
+    // assumes the whole row has missing values (true for dutch classroom)
+    void DynamicLatentSpaceNetworkSampler::sample_Y_miss(
+            unsigned int sample_index) {
+
+        arma::cube X = X_.at(sample_index);
+        double beta_in = beta_in_(sample_index);
+        double beta_out = beta_out_(sample_index);
+        arma::rowvec radii = radii_.row(sample_index);
+
+        double dij = 0;
+        double eta = 0;
+        double Y_proba = 0;
+        double u = 0;
+
+        arma::uvec Y_miss_indices;
+        unsigned int Y_miss_index;
+
+        for(unsigned int t = 0; t < num_time_steps_; ++t) {
+            Y_miss_indices = Y_miss_.at(t);
+            if(Y_miss_indices.n_elem == 0) {
+                continue;
+            }
+
+            for(unsigned int i = 0; i < Y_miss_indices.n_elem; ++i) {
+                Y_miss_index = Y_miss_indices(i);
+                for(unsigned int j = 0; j < num_nodes_; ++j) {
+                    if(Y_miss_index != j) {
+                        dij = arma::norm(
+                            X.slice(t).row(Y_miss_index) - X.slice(t).row(j));
+                        eta = beta_in * (1 - dij / radii(j)) +
+                              beta_out * (1 - dij / radii(Y_miss_index));
+                        Y_proba = 1 / (1 + std::exp(-eta));
+
+                    }
+
+                    double u = runif_.single_sample();
+                    if(u < Y_proba) {
+                        Y_(Y_miss_index, j, t) = 1.0;
+                    } else {
+                        Y_(Y_miss_index, j, t) = 0.0;
+                    }
+                }
+            }
+        }
+    }
+
+    void DynamicLatentSpaceNetworkSampler::tune_step_sizes() {
+        // step size for X
+        double acc_rate = arma::min(arma::vectorise(X_acc_rate_));
+        step_size_x_ = tune_step_size(step_size_x_, acc_rate / tune_interval_);
+        X_acc_rate_ = arma::mat(num_nodes_, num_time_steps_, arma::fill::zeros);
+
+        // step size for beta_in
+        acc_rate = std::min(beta_in_acc_rate_, beta_out_acc_rate_);
+        step_size_beta_ = tune_step_size(step_size_beta_, acc_rate / tune_interval_);
+        beta_in_acc_rate_ = 0.;
+        beta_out_acc_rate_ = 0.;
+
+        // step size for radii
+        acc_rate = radii_acc_rate_;
+        step_size_radii_ = tune_step_size_radii(
+            step_size_radii_, acc_rate / tune_interval_),
+        step_size_radii_ = std::min(step_size_radii_, 200000.);
+        radii_acc_rate_ = 0.;
+    }
+
     ParamSamples DynamicLatentSpaceNetworkSampler::sample() {
         for(unsigned int i = 1; i < num_samples_; ++i) {
-            sample_index_ = i;
-
             // latent positions random walk metropolis
-            X_.at(sample_index_) = sample_latent_positions();
+            X_.at(i) = sample_latent_positions(i);
 
             // beta_in / beta_out random walk metropolis
-            beta_in_(sample_index_) = sample_beta_in();
-            beta_out_(sample_index_) = sample_beta_out();
+            beta_in_(i) = sample_beta_in(i);
+            beta_out_(i) = sample_beta_out(i);
 
             // tau_sq / sigma_sq gibbs sample
-            tau_sq_(sample_index_) = sample_tau_sq();
-            sigma_sq_(sample_index_) = sample_sigma_sq();
+            tau_sq_(i) = sample_tau_sq(i);
+            sigma_sq_(i) = sample_sigma_sq(i);
 
             // radii metropolis-hastings with a nonsymmetric dirichlet proposal
-            radii_.row(sample_index_) = sample_radii();
+            radii_.row(i) = sample_radii(i);
+
+            // sample missing values
+            sample_Y_miss(i);
+
+            if(tune_ && steps_until_tune_ == 0 && i < num_burn_in_) {
+                tune_step_sizes();
+                steps_until_tune_ = tune_interval_;
+            } else {
+                steps_until_tune_ -= 1;
+            }
         }
 
         return { tau_sq_, sigma_sq_, beta_in_, beta_out_, radii_, X_ };

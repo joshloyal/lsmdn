@@ -1,6 +1,15 @@
+library(zeallot)
+
 initialize_params <- function(Y, num_dimensions = 2) {
     n_nodes <- dim(Y)[1]
     n_time_steps <- dim(Y)[3]
+    
+    # impute missing values
+    if(sum(is.na(Y))) {
+        c(Y, Y_miss) %<-% impute_na(Y)
+    } else {
+        Y_miss <- matrix(0, nrow = n_time_steps, ncol = n_nodes)
+    }
     
     # initialize radii
     radii <- initialize_radii(Y)
@@ -29,10 +38,26 @@ initialize_params <- function(Y, num_dimensions = 2) {
     sigma_shape <- 9
     sigma_scale <- 1.5
     
-    list(X=X, radii=radii, beta_in=beta_in, beta_out=beta_out,
+    list(Y_miss=Y_miss, 
+         X=X, radii=radii, beta_in=beta_in, beta_out=beta_out,
          nu_in=nu_in, xi_in=xi_in, nu_out=nu_out, xi_out=xi_out,
          tau_sq=tau_sq, tau_shape=tau_shape, tau_scale=tau_scale,
          sigma_sq=sigma_sq, sigma_shape=sigma_shape, sigma_scale=sigma_scale)
+}
+
+impute_na <- function(Y) {
+    n_nodes <- dim(Y)[1]
+    n_time_steps <- dim(Y)[3]
+    Y_miss <- matrix(0, nrow = n_time_steps, ncol = n_nodes)
+    for(t in 2:n_time_steps) {
+        na_indices <- which(is.na(Y[, 1, t]))
+        if(length(na_indices) > 0) {
+            Y[na_indices, , t] <- Y[na_indices, , t - 1]
+            Y_miss[t, na_indices] <- 1
+        }
+    }
+    
+    list(Y, Y_miss)
 }
 
 initialize_radii <- function(Y, eps = 1e-5) {

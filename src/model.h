@@ -13,6 +13,7 @@ namespace lsmdn {
         double latent_distance(int i, int j, int t);
         double get_eta(double dx, int i, int j);
         double log_likelihood();
+        arma::cube predict_proba();
         arma::vec grad_beta();
 
     private:

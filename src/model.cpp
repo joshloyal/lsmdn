@@ -42,6 +42,27 @@ namespace lsmdn {
         return log_lik;
     }
 
+    arma::cube DynamicLatentSpaceNetwork::predict_proba() {
+        double eta;
+        double dx;
+        arma::cube Y_proba(num_nodes_, num_nodes_, num_time_steps_,
+                           arma::fill::zeros);
+
+        for(int t = 0; t < num_time_steps_; ++t) {
+            for(int i = 0; i < num_nodes_; ++i) {
+                for(int j = 0; j < num_nodes_; ++j) {
+                    if(i != j) {
+                        dx = latent_distance(i, j, t);
+                        eta = get_eta(dx, i, j);
+                        Y_proba(i, j, t) = 1. / (1. + std::exp(-eta));
+                    }
+                }
+            }
+        }
+
+        return Y_proba;
+    }
+
     arma::vec DynamicLatentSpaceNetwork::grad_beta() {
         double eta;
         double dx;
