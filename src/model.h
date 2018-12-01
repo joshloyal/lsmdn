@@ -1,6 +1,7 @@
 #pragma once
 
 #include "RcppArmadillo.h"
+#include "distributions.h"
 
 namespace lsmdn {
 
@@ -14,6 +15,7 @@ namespace lsmdn {
         double get_eta(double dx, int i, int j);
         double log_likelihood();
         arma::cube predict_proba();
+        arma::cube sample(unsigned int seed);
         arma::vec grad_beta();
 
     private:

@@ -7,13 +7,17 @@ Author: Who wrote it
 Maintainer: Who to complain to <yourfault@somewhere.net>
 Description: More about what it does (maybe more than one line)
 License: MIT + file LICENSE
-Imports: 
+LazyData: true
+Imports:
     Rcpp (>= 0.12.17),
     igraph,
     zeallot,
     xergm,
-    abind
+    abind,
+    pROC,
+    MCMCpack,
+    here
 LinkingTo: Rcpp, RcppArmadillo
 RoxygenNote: 6.1.0
-Suggests: 
+Suggests:
     testthat

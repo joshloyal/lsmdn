@@ -1,0 +1,73 @@
+---
+title: "network_eda"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+
+library(igraph)
+library(tidygraph)
+library(zeallot)
+
+library(lsmdn)
+```
+
+```{r hairballs}
+convert_to_tidy_graph <- function(dutch, t) {
+    sex_colors <- c(adjustcolor('darkorange', alpha.f = 0.9), adjustcolor('steelblue', 0.9))
+    graph_tbl <- igraph::graph_from_adjacency_matrix(dutch$Y[, , t]) %>% 
+        igraph::simplify() %>% 
+        as_tbl_graph() %>% 
+        activate(nodes) %>% 
+        mutate(sex = dutch$demographics$sex) %>% 
+        mutate(age = dutch$demographics$age) %>% 
+        mutate(ethnicity = dutch$demographics$ethnicity) %>% 
+        mutate(religion = dutch$demographics$religion) %>% 
+        mutate(missing = is.na(dutch$Y[,3,t])) %>% 
+        #arrange(sex) %>% 
+        # plotting attributes
+        mutate(color = ifelse(sex == 'boy', sex_colors[2], sex_colors[1])) %>% 
+        mutate(shape = ifelse(ethnicity == 'dutch', 'circle', 'square')) %>% 
+        mutate(label.cex = 0.5) %>%
+        mutate(label.color = 'black') %>% 
+        mutate(frame.color = ifelse(missing, 'black', 'white')) %>% 
+        activate(edges) %>% 
+        mutate(arrow.size = 0.3) 
+    
+    graph_tbl
+}
+```
+
+```{r hairballs}
+par(mfrow=c(2, 2), mar=c(1, 1, 1, 1))
+
+graph <- convert_to_tidy_graph(dutch, t = 4)
+l <- layout_with_fr(graph)
+
+for(t in 1:4) {
+    graph <- convert_to_tidy_graph(dutch, t = t) 
+    plot(graph, layout = l)
+    text(x = -1.5, y = 1, paste0("t = ", t))
+}
+```
+
+```{r circle}
+par(mfrow=c(2, 2), mar=c(0, 0, 0, 0))
+
+for(t in 1:4) {
+    graph <- convert_to_tidy_graph(dutch, t = t) %>% 
+        activate(nodes) %>% 
+        arrange(sex)
+    
+    plot(graph, layout = igraph::layout_in_circle)
+    text(x = -1.5, y = 1, paste0("t = ", t))
+}
+```
+```{r degree_dist}
+degree_tbl <- tibble(
+    degree = degree(convert_to_tidy_graph(dutch, t = 2))
+)
+```

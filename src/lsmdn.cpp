@@ -83,6 +83,17 @@ arma::cube lsmdn_predict_proba(const arma::cube &Y, const arma::cube &X,
     return model.predict_proba();
 }
 
+//' Sample a network from a lsmdn model
+//'
+//' @export
+// [[Rcpp::export]]
+arma::cube lsmdn_sample(const arma::cube &Y, const arma::cube &X,
+                        const arma::vec &radii, double beta_in,
+                        double beta_out, unsigned int seed) {
+    lsmdn::DynamicLatentSpaceNetwork model(Y, X, radii, beta_in, beta_out);
+    return model.sample(seed);
+}
+
 //' Sample a single latent position
 //'
 //Rcpp::List sample_latent_positions(const arma::cube &Y,

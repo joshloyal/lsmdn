@@ -52,6 +52,13 @@ lsmdn_predict_proba <- function(Y, X, radii, beta_in, beta_out) {
     .Call(`_lsmdn_lsmdn_predict_proba`, Y, X, radii, beta_in, beta_out)
 }
 
+#' Sample a network from a lsmdn model
+#'
+#' @export
+lsmdn_sample <- function(Y, X, radii, beta_in, beta_out, seed) {
+    .Call(`_lsmdn_lsmdn_sample`, Y, X, radii, beta_in, beta_out, seed)
+}
+
 #' Fits a Latent Space Model for a Dynamic Network
 #'
 #' @param Y The adjacency matrix for each network,

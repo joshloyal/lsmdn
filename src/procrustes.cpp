@@ -19,6 +19,6 @@ namespace lsmdn {
         arma::mat V;
         arma::svd_econ(U, s, V, XtY);
 
-        return Y * V * U.t();
+        return Y_center * V * U.t();
     }
 }

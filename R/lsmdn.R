@@ -76,16 +76,51 @@ lsmdn <- function(Y,
 }
 
 #' Compute edge probabilities for the fitted adjacency matrix
+#' 
+#' @export
 predict.lsmdn <- function(model) {
     lsmdn_predict_proba(model$Y, model$X, model$radii, model$beta_in,
                         model$beta_out)
+}
+
+auc <- function (x, ...) {
+    UseMethod("auc", x)
+}
+
+#' In-sample AUC
+#' 
+#' @export
+auc.lsmdn <- function(model) {
+    # probability of each edge 
+    Y_proba <- predict(model)
+    Y <- model$Y
+    
+    # flatten probabilities
+    y_proba <- numeric(0)
+    y <- numeric(0)
+    num_time_steps <- dim(model$Y)[3]
+    for(t in 1:num_time_steps) {
+        Yt_proba <- Y_proba[, , num_time_steps]
+        y_proba <- c(y_proba, Yt_proba[upper.tri(Yt_proba)])
+        y_proba <- c(y_proba, Yt_proba[lower.tri(Yt_proba)])
+        
+        Yt <- Y[, , num_time_steps]
+        y <- c(y, Yt[upper.tri(Yt)])
+        y <- c(y, Yt[lower.tri(Yt)])
+    }
+    
+    pROC::auc(y, y_proba)
+}
+
+update <- function (x, ...) {
+    UseMethod("update", x)
 }
 
 #' Run the sampler for more iterations using the last values of the
 #' chain as initial values.
 #' 
 #' @export
-#update.lsmdn <- function(model, num_samples = 1000) {
+#update.lsmdn <- function(model, num_samples = 1000, seed = 123) {
 #    num_samples <- model$num_samples
 #    samples <- model$samples
 #    

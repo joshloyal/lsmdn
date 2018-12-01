@@ -253,7 +253,7 @@ namespace  lsmdn {
             X_new.slice(t).each_row() -= col_means.slice(0);
         }
 
-        // procrustes transformation if we are past the burn-in period
+        // rocrustes transformation if we are past the burn-in period
         if (sample_index > num_burn_in_) {
             arma::mat X0 = flatten_cube(X_.at(num_burn_in_));
             arma::mat Xl = flatten_cube(X_new);
@@ -382,15 +382,12 @@ namespace  lsmdn {
         arma::mat X0 = X_.at(sample_index).slice(0);
 
         // calculate scale of the inverse gamma distribution
-        double invgamma_scale =
-            tau_scale_ + 0.5 * (num_nodes_ * num_dimensions_);
+        double invgamma_shape =
+            tau_shape_ + 0.5 * (num_nodes_ * num_dimensions_);
 
         // calculate shape of the inverse gamma distribution
-        double sq_norm_sum = 0.;
-        for(unsigned int i = 0; i < num_nodes_; ++i) {
-            sq_norm_sum += arma::as_scalar(X0.row(i) * X0.row(i).t());
-        }
-        double invgamma_shape = tau_shape_ + 0.5 * sq_norm_sum;
+        double sq_norm_sum = arma::sum(arma::vectorise(arma::square(X0)));
+        double invgamma_scale = tau_scale_ + 0.5 * sq_norm_sum;
 
         // sample from the inverse gamma distribution
         InverseGammaSampler rinvgamma(invgamma_shape,
@@ -405,8 +402,8 @@ namespace  lsmdn {
         arma::cube X = X_.at(sample_index);
 
         // calculate the scale of the inverse gamma distribution
-        double invgamma_scale =
-            sigma_scale_ +
+        double invgamma_shape =
+            sigma_shape_ +
             0.5 * (num_nodes_ * num_dimensions_ * (num_time_steps_ - 1));
 
         // calculate the shape of the inverse gamma distribution
@@ -414,13 +411,10 @@ namespace  lsmdn {
         arma::mat X_diffs;
         for(unsigned int t = 1; t < num_time_steps_; ++t) {
             X_diffs = X.slice(t) - X.slice(t - 1);
-            for(unsigned int i = 0; i < num_nodes_; ++i) {
-                sq_norm_sum += arma::as_scalar(
-                    X_diffs.row(i) * X_diffs.row(i).t());
-            }
+            sq_norm_sum += arma::sum(arma::vectorise(arma::square(X_diffs)));
         }
 
-        double invgamma_shape = sigma_shape_ + 0.5 * sq_norm_sum;
+        double invgamma_scale = sigma_scale_ + 0.5 * sq_norm_sum;
 
         // sample from the inverse gamma distribution
         InverseGammaSampler rinvgamma(invgamma_shape,

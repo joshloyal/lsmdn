@@ -63,6 +63,35 @@ namespace lsmdn {
         return Y_proba;
     }
 
+    arma::cube DynamicLatentSpaceNetwork::sample(unsigned int seed) {
+        double eta;
+        double dx;
+        double proba;
+        double u;
+        arma::cube Y(num_nodes_, num_nodes_, num_time_steps_,
+                     arma::fill::zeros);
+
+        std::mt19937_64 random_state(seed);
+        UniformSampler runif(0.0, 1.0, random_state);
+        for(int t = 0; t < num_time_steps_; ++t) {
+            for(int i = 0; i < num_nodes_; ++i) {
+                for(int j = 0; j < num_nodes_; ++j) {
+                    if(i != j) {
+                        dx = latent_distance(i, j, t);
+                        eta = get_eta(dx, i, j);
+                        proba = 1. / (1. + std::exp(-eta));
+                        u = runif.single_sample();
+                        if(u < proba) {
+                            Y(i, j, t) = 1.0;
+                        }
+                    }
+                }
+            }
+        }
+
+        return Y;
+    }
+
     arma::vec DynamicLatentSpaceNetwork::grad_beta() {
         double eta;
         double dx;

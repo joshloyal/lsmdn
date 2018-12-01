@@ -90,6 +90,22 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// lsmdn_sample
+arma::cube lsmdn_sample(const arma::cube& Y, const arma::cube& X, const arma::vec& radii, double beta_in, double beta_out, unsigned int seed);
+RcppExport SEXP _lsmdn_lsmdn_sample(SEXP YSEXP, SEXP XSEXP, SEXP radiiSEXP, SEXP beta_inSEXP, SEXP beta_outSEXP, SEXP seedSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const arma::cube& >::type Y(YSEXP);
+    Rcpp::traits::input_parameter< const arma::cube& >::type X(XSEXP);
+    Rcpp::traits::input_parameter< const arma::vec& >::type radii(radiiSEXP);
+    Rcpp::traits::input_parameter< double >::type beta_in(beta_inSEXP);
+    Rcpp::traits::input_parameter< double >::type beta_out(beta_outSEXP);
+    Rcpp::traits::input_parameter< unsigned int >::type seed(seedSEXP);
+    rcpp_result_gen = Rcpp::wrap(lsmdn_sample(Y, X, radii, beta_in, beta_out, seed));
+    return rcpp_result_gen;
+END_RCPP
+}
 // fit_latent_space_network
 Rcpp::List fit_latent_space_network(arma::cube& Y, const arma::mat& Y_miss, const arma::cube& X_init, const arma::vec& radii_init, const double beta_in, const double beta_out, const double nu_in, const double xi_in, const double nu_out, const double xi_out, const double tau_sq, const double tau_shape, const double tau_scale, const double sigma_sq, const double sigma_shape, const double sigma_scale, const int num_samples, const int num_burn_in, const bool tune, unsigned int tune_interval, const double step_size_x, const double step_size_beta, const double step_size_radii, const unsigned int seed);
 RcppExport SEXP _lsmdn_fit_latent_space_network(SEXP YSEXP, SEXP Y_missSEXP, SEXP X_initSEXP, SEXP radii_initSEXP, SEXP beta_inSEXP, SEXP beta_outSEXP, SEXP nu_inSEXP, SEXP xi_inSEXP, SEXP nu_outSEXP, SEXP xi_outSEXP, SEXP tau_sqSEXP, SEXP tau_shapeSEXP, SEXP tau_scaleSEXP, SEXP sigma_sqSEXP, SEXP sigma_shapeSEXP, SEXP sigma_scaleSEXP, SEXP num_samplesSEXP, SEXP num_burn_inSEXP, SEXP tuneSEXP, SEXP tune_intervalSEXP, SEXP step_size_xSEXP, SEXP step_size_betaSEXP, SEXP step_size_radiiSEXP, SEXP seedSEXP) {
@@ -132,6 +148,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_lsmdn_lsmdn_log_likelihood", (DL_FUNC) &_lsmdn_lsmdn_log_likelihood, 5},
     {"_lsmdn_lsmdn_grad_beta", (DL_FUNC) &_lsmdn_lsmdn_grad_beta, 5},
     {"_lsmdn_lsmdn_predict_proba", (DL_FUNC) &_lsmdn_lsmdn_predict_proba, 5},
+    {"_lsmdn_lsmdn_sample", (DL_FUNC) &_lsmdn_lsmdn_sample, 6},
     {"_lsmdn_fit_latent_space_network", (DL_FUNC) &_lsmdn_fit_latent_space_network, 24},
     {NULL, NULL, 0}
 };
