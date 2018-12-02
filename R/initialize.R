@@ -60,15 +60,16 @@ impute_na <- function(Y) {
     list(Y, Y_miss)
 }
 
+
 initialize_radii <- function(Y, eps = 1e-5) {
     n_nodes <- dim(Y)[1]
     n_time_steps <- dim(Y)[3]
     
     radii <- matrix(0, n_nodes)
     for (t in 1:n_time_steps) {
-        radii <- radii + (apply(Y[, , t], 1, sum) + apply(Y[, , t], 2, sum)) / 2
+        radii <- radii + (apply(Y[, , t], 1, sum) + apply(Y[, , t], 2, sum))
     }
-    radii <- radii / sum(Y) 
+    radii <- radii / sum(Y) / 2
     
     # radii must be non-zero so add a fudge factor if any are zero
     if (sum(radii == 0) > 0) {
@@ -76,7 +77,7 @@ initialize_radii <- function(Y, eps = 1e-5) {
         radii <- radii / sum(radii)
     }
     
-    radii
+    radii / sum(radii)
 }
 
 

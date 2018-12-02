@@ -58,7 +58,15 @@ lsmdn <- function(Y,
             beta_out = mean(samples$beta_out),
             radii = colMeans(samples$radii),
             tau_sq = mean(samples$tau_sq),
+            tau_shape = params$tau_shape,
+            tau_scale = params$tau_scale,
             sigma_sq = mean(samples$sigma_sq),
+            sigma_shape = params$sigma_shape,
+            sigma_scale = params$sigma_scale,
+            nu_in = params$nu_in,
+            xi_in = params$xi_in,
+            nu_out = params$nu_out,
+            xi_out = params$xi_out,
             X_acc_rate = mcmc_out$X_acc_rate,
             step_size_x = mcmc_out$step_size_x,
             beta_in_acc_rate = mcmc_out$beta_in_acc_rate,
@@ -69,10 +77,84 @@ lsmdn <- function(Y,
             samples = samples, 
             num_samples = length(samples$beta_in),
             burn = burn, 
-            seed = seed
+            seed_start = seed,
+            seed = sample(1:99999, 1)
         ), 
         class = 'lsmdn'
     )
+}
+
+update <- function (x, ...) {
+    UseMethod("update", x)
+}
+
+#' Run the sampler for more iterations using the last values of the
+#' chain as initial values.
+#' 
+#' @export
+update.lsmdn <- function(model, num_samples = 1000) {
+    num_samples_prev <- model$num_samples
+    samples <- model$samples
+    
+    mcmc_out <- fit_latent_space_network(
+        model$Y, model$Y_miss, 
+        samples$X[[num_samples_prev]], samples$radii[num_samples_prev, ], 
+        samples$beta_in[num_samples_prev], samples$beta_out[num_samples_prev],
+        model$nu_in, model$xi_in, model$nu_out, model$xi_out,
+        samples$tau_sq[num_samples_prev], model$tau_shape, model$tau_scale, 
+        samples$sigma_sq[num_samples_prev], model$sigma_shape, model$sigma_scale,
+        num_samples, 0, FALSE, 100,
+        model$step_size_x, model$step_size_beta, model$step_size_radii, 
+        model$seed)
+    
+    # re-shape latent space samples
+    latent_dim <- c(dim(model$Y)[1], dim(model$X)[2], dim(model$Y)[3])
+    mcmc_out$X <- lapply(mcmc_out$X, function(x) { array(x, latent_dim) })
+    
+    # append new samples
+    samples = list(
+        beta_in = c(model$samples$beta_in, mcmc_out$beta_in),
+        beta_out = c(model$samples$beta_out, mcmc_out$beta_out),
+        X = c(model$samples$X, mcmc_out$X),
+        radii = rbind(model$samples$radii, mcmc_out$radii),
+        tau_sq = c(model$samples$tau_sq, mcmc_out$tau_sq),
+        sigma_sq = c(model$samples$sigma_sq, mcmc_out$sigma_sq)
+    )
+    
+    structure(
+        list(
+            Y = mcmc_out$Y,
+            Y_miss = model$Y_miss,
+            X = mean_latent_positions(samples$X),
+            beta_in = mean(samples$beta_in),
+            beta_out = mean(samples$beta_out),
+            radii = colMeans(samples$radii),
+            tau_sq = mean(samples$tau_sq),
+            tau_shape = model$tau_shape,
+            tau_scale = model$tau_scale,
+            sigma_sq = mean(samples$sigma_sq),
+            sigma_shape = model$sigma_shape,
+            sigma_scale = model$sigma_scale,
+            nu_in = model$nu_in,
+            xi_in = model$xi_in,
+            nu_out = model$nu_out,
+            xi_out = model$xi_out,
+            X_acc_rate = mcmc_out$X_acc_rate,
+            step_size_x = mcmc_out$step_size_x,
+            beta_in_acc_rate = mcmc_out$beta_in_acc_rate,
+            beta_out_acc_rate = mcmc_out$beta_out_acc_rate,
+            step_size_beta = mcmc_out$step_size_beta,
+            radii_acc_rate = mcmc_out$radii_acc_rate,
+            step_size_radii = mcmc_out$step_size_radii,
+            samples = samples, 
+            num_samples = length(samples$beta_in),
+            burn = model$burn, 
+            seed_start = model$seed,
+            seed = sample(1:99999, 1)
+        ), 
+        class = 'lsmdn'
+    )
+    
 }
 
 #' Compute edge probabilities for the fitted adjacency matrix
@@ -111,26 +193,3 @@ auc.lsmdn <- function(model) {
     
     pROC::auc(y, y_proba)
 }
-
-update <- function (x, ...) {
-    UseMethod("update", x)
-}
-
-#' Run the sampler for more iterations using the last values of the
-#' chain as initial values.
-#' 
-#' @export
-#update.lsmdn <- function(model, num_samples = 1000, seed = 123) {
-#    num_samples <- model$num_samples
-#    samples <- model$samples
-#    
-#    fit_latent_space_network(
-#        Y, model$Y_miss, 
-#        samples$X[num_samples], samples$radii[num_samples, ], 
-#        samples$beta_in[num_samples], samples$beta_out[num_samples],
-#        params$nu_in, params$xi_in, params$nu_out, params$xi_out,
-#        params$tau_sq, params$tau_shape, params$tau_scale, params$sigma_sq,
-#        params$sigma_shape, params$sigma_scale,
-#        num_samples, burn, tune, tune_interval,
-#        step_size_x, step_size_beta, step_size_radii, seed)
-#}
