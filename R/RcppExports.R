@@ -34,15 +34,15 @@ rdirichlet <- function(num_samples, alphas, seed = 123L) {
 #' Calculates the log-likelihood of the latent space network model.
 #'
 #' @export
-lsmdn_log_likelihood <- function(Y, X, radii, beta_in, beta_out) {
-    .Call(`_lsmdn_lsmdn_log_likelihood`, Y, X, radii, beta_in, beta_out)
+lsmdn_log_likelihood <- function(Y, X, radii, beta_in, beta_out, intercept) {
+    .Call(`_lsmdn_lsmdn_log_likelihood`, Y, X, radii, beta_in, beta_out, intercept)
 }
 
 #' Calculates the log-likelihood of the latent space network model.
 #'
 #' @export
-lsmdn_grad_beta <- function(Y, X, radii, beta_in, beta_out) {
-    .Call(`_lsmdn_lsmdn_grad_beta`, Y, X, radii, beta_in, beta_out)
+lsmdn_grad_beta <- function(Y, X, radii, beta_in, beta_out, intercept) {
+    .Call(`_lsmdn_lsmdn_grad_beta`, Y, X, radii, beta_in, beta_out, intercept)
 }
 
 #' Calculate the probabilities of an edge formation according to the model
@@ -65,7 +65,7 @@ lsmdn_sample <- function(Y, X, radii, beta_in, beta_out, seed) {
 #'  shape (n_time_points, n_nodes, n_nodes)
 #' @return
 #' @export
-fit_latent_space_network <- function(Y, Y_miss, X_init, radii_init, beta_in, beta_out, nu_in, xi_in, nu_out, xi_out, tau_sq, tau_shape, tau_scale, sigma_sq, sigma_shape, sigma_scale, num_samples, num_burn_in, tune, tune_interval, step_size_x, step_size_beta, step_size_radii, seed) {
-    .Call(`_lsmdn_fit_latent_space_network`, Y, Y_miss, X_init, radii_init, beta_in, beta_out, nu_in, xi_in, nu_out, xi_out, tau_sq, tau_shape, tau_scale, sigma_sq, sigma_shape, sigma_scale, num_samples, num_burn_in, tune, tune_interval, step_size_x, step_size_beta, step_size_radii, seed)
+fit_latent_space_network <- function(Y, Y_miss, X_init, radii_init, beta_in, beta_out, intercept, nu_in, xi_in, nu_out, xi_out, nu_intercept, xi_intercept, tau_sq, tau_shape, tau_scale, sigma_sq, sigma_shape, sigma_scale, num_samples, num_burn_in, tune, tune_interval, step_size_x, step_size_intercept, step_size_beta, step_size_radii, seed) {
+    .Call(`_lsmdn_fit_latent_space_network`, Y, Y_miss, X_init, radii_init, beta_in, beta_out, intercept, nu_in, xi_in, nu_out, xi_out, nu_intercept, xi_intercept, tau_sq, tau_shape, tau_scale, sigma_sq, sigma_shape, sigma_scale, num_samples, num_burn_in, tune, tune_interval, step_size_x, step_size_intercept, step_size_beta, step_size_radii, seed)
 }
 

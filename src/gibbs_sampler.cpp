@@ -51,10 +51,13 @@ namespace  lsmdn {
             const arma::vec &radii_init,
             const double beta_in,
             const double beta_out,
+            const double intercept,
             const double nu_in,
             const double xi_in,
             const double nu_out,
             const double xi_out,
+            const double nu_intercept,
+            const double xi_intercept,
             const double tau_sq,
             const double tau_shape,
             const double tau_scale,
@@ -66,6 +69,7 @@ namespace  lsmdn {
             bool tune,
             const unsigned int tune_interval,
             const double step_size_x,
+            const double step_size_intercept,
             const double step_size_beta,
             const double step_size_radii,
             unsigned int seed,
@@ -88,6 +92,9 @@ namespace  lsmdn {
             beta_out_(num_samples, arma::fill::zeros),
             nu_out_(nu_out),
             xi_out_(xi_out),
+            intercept_(num_samples, arma::fill::zeros),
+            nu_intercept_(nu_intercept),
+            xi_intercept_(xi_intercept),
             radii_(num_samples, Y_.n_rows, arma::fill::zeros),
             random_state_(seed),
             runif_(0.0, 1.0, random_state_),
@@ -96,9 +103,11 @@ namespace  lsmdn {
             tune_interval_(tune_interval),
             steps_until_tune_(tune_interval),
             step_size_x_(step_size_x),
+            step_size_intercept_(step_size_intercept),
             step_size_beta_(step_size_beta),
             step_size_radii_(step_size_radii),
             X_acc_rate_(num_nodes_, num_time_steps_, arma::fill::zeros),
+            intercept_acc_rate_(0),
             beta_in_acc_rate_(0),
             beta_out_acc_rate_(0),
             radii_acc_rate_(0),
@@ -113,6 +122,7 @@ namespace  lsmdn {
         sigma_sq_(0) = sigma_sq;
         beta_in_(0) = beta_in;
         beta_out_(0) = beta_out;
+        intercept_(0) = intercept;
         radii_.row(0) = radii_init.t();
         X_.resize(num_samples_);
         X_.at(0) = arma::cube(X_init);
@@ -142,6 +152,7 @@ namespace  lsmdn {
 
         // parameters from previous sample.
         // this is the first step in the metropolis-in-gibbs algorithm
+        double intercept = intercept_(sample_index - 1);
         double beta_in = beta_in_(sample_index - 1);
         double beta_out = beta_out_(sample_index - 1);
         arma::rowvec radii = radii_.row(sample_index - 1);
@@ -181,17 +192,25 @@ namespace  lsmdn {
 
                         accept_ratio += std::log(
                             1 + std::exp(beta_in * (1 - dij_prev / radii(i)) +
-                                         beta_out * (1 - dij_prev / radii(j))));
+                                         beta_out * (1 - dij_prev / radii(j)) +
+                                         intercept)
+                        );
                         accept_ratio += std::log(
                             1 + std::exp(beta_in * (1 - dij_prev / radii(j)) +
-                                         beta_out * (1 - dij_prev / radii(i))));
+                                         beta_out * (1 - dij_prev / radii(i)) +
+                                         intercept)
+                        );
 
                         accept_ratio -= std::log(
                             1 + std::exp(beta_in * (1 - dij_prop / radii(i)) +
-                                         beta_out * (1 - dij_prop / radii(j))));
+                                         beta_out * (1 - dij_prop / radii(j)) +
+                                         intercept)
+                        );
                         accept_ratio -= std::log(
                             1 + std::exp(beta_in * (1 - dij_prop / radii(j)) +
-                                         beta_out * (1 - dij_prop / radii(i))));
+                                         beta_out * (1 - dij_prop / radii(i)) +
+                                         intercept)
+                        );
                     }
                 } // loop j
 
@@ -273,6 +292,7 @@ namespace  lsmdn {
 
         // current parameter values
         arma::cube X = X_.at(sample_index);
+        double intercept = intercept_(sample_index);
         double beta_out = beta_out_(sample_index - 1);
         arma::rowvec radii = radii_.row(sample_index - 1);
 
@@ -294,9 +314,11 @@ namespace  lsmdn {
                         dij = arma::norm(
                             X.slice(t).row(i) - X.slice(t).row(j), 2);
                         eta_prop = beta_in_prop * (1 - dij / radii(j)) +
-                            beta_out * (1 - dij / radii(i));
+                            beta_out * (1 - dij / radii(i)) +
+                            intercept;
                         eta_prev = beta_in_prev * (1 - dij / radii(j)) +
-                            beta_out * (1 - dij / radii(i));
+                            beta_out * (1 - dij / radii(i)) +
+                            intercept;
 
                         accept_ratio += (Y_(i, j, t) *
                             (beta_in_prop - beta_in_prev) *
@@ -322,6 +344,62 @@ namespace  lsmdn {
         }
     }
 
+    double DynamicLatentSpaceNetworkSampler::sample_intercept(
+            unsigned int sample_index) {
+        double intercept_prev = intercept_(sample_index - 1);
+
+        // current parameter values
+        arma::cube X = X_.at(sample_index);
+        double beta_in = beta_in_(sample_index - 1);
+        double beta_out = beta_out_(sample_index - 1);
+        arma::rowvec radii = radii_.row(sample_index - 1);
+
+        // random walk metropolis
+        double intercept_prop =
+            intercept_prev + step_size_intercept_ * rnorm_.single_sample();
+
+        // determine acceptance ratio
+        double accept_ratio = 0;
+        double dij = 0;
+        double eta_prop = 0;
+        double eta_prev = 0;
+
+        // likelihood ratio
+        for(unsigned int t = 0; t < num_time_steps_; ++t) {
+            for(unsigned int i = 0; i < num_nodes_; ++i) {
+                for(unsigned int j = 0; j < num_nodes_; ++j) {
+                    if (i != j) {
+                        dij = arma::norm(
+                            X.slice(t).row(i) - X.slice(t).row(j), 2);
+                        eta_prop = beta_in * (1 - dij / radii(j)) +
+                            beta_out * (1 - dij / radii(i)) +
+                            intercept_prop;
+                        eta_prev = beta_in * (1 - dij / radii(j)) +
+                            beta_out * (1 - dij / radii(i)) +
+                            intercept_prev;
+
+                        accept_ratio += (Y_(i, j, t) *
+                            (intercept_prop - intercept_prev)) -
+                            std::log(1 + std::exp(eta_prop)) +
+                            std::log(1 + std::exp(eta_prev));
+                    }
+                }
+            }
+        }
+
+        // prior ratio
+        accept_ratio -= std::pow(intercept_prop - nu_intercept_, 2) / (2. * xi_intercept_);
+        accept_ratio += std::pow(intercept_prev - nu_intercept_, 2) / (2. * xi_intercept_);
+
+        // accept / reject
+        double u = runif_.single_sample();
+        if(std::log(u) < accept_ratio) {
+            intercept_acc_rate_ += 1;
+            return intercept_prop;
+        } else {
+            return intercept_prev;
+        }
+    }
     double DynamicLatentSpaceNetworkSampler::sample_beta_out(
             unsigned int sample_index) {
         double beta_out_prev = beta_out_(sample_index - 1);
@@ -329,6 +407,7 @@ namespace  lsmdn {
         // current parameter values
         arma::cube X = X_.at(sample_index);
         double beta_in = beta_in_(sample_index);
+        double intercept = intercept_(sample_index);
         arma::rowvec radii = radii_.row(sample_index - 1);
 
         // random walk metropolis
@@ -349,9 +428,11 @@ namespace  lsmdn {
                         dij = arma::norm(
                             X.slice(t).row(i) - X.slice(t).row(j), 2);
                         eta_prop = beta_in * (1 - dij / radii(j)) +
-                            beta_out_prop * (1 - dij / radii(i));
+                            beta_out_prop * (1 - dij / radii(i)) +
+                            intercept;
                         eta_prev = beta_in * (1 - dij / radii(j)) +
-                            beta_out_prev * (1 - dij / radii(i));
+                            beta_out_prev * (1 - dij / radii(i)) +
+                            intercept;
 
                         accept_ratio += (Y_(i, j, t) *
                             (beta_out_prop - beta_out_prev) *
@@ -430,6 +511,7 @@ namespace  lsmdn {
 
         // extract current parameters of the model
         arma::cube X = X_.at(sample_index);
+        double intercept = intercept_(sample_index);
         double beta_in = beta_in_(sample_index);
         double beta_out = beta_out_(sample_index);
 
@@ -452,9 +534,11 @@ namespace  lsmdn {
                         dij = arma::norm(
                             X.slice(t).row(i) - X.slice(t).row(j), 2);
                         eta_prev = beta_in * (1 - dij / radii_prev(j)) +
-                            beta_out * (1 - dij / radii_prev(i));
+                            beta_out * (1 - dij / radii_prev(i)) +
+                            intercept;
                         eta_prop = beta_in * (1 - dij / radii_prop(j)) +
-                            beta_out * (1 - dij / radii_prop(i));
+                            beta_out * (1 - dij / radii_prop(i)) +
+                            intercept;
 
                         accept_ratio += Y_(i, j, t) * (eta_prop - eta_prev);
                         accept_ratio += std::log(1 + std::exp(eta_prev)) -
@@ -547,6 +631,11 @@ namespace  lsmdn {
         step_size_x_ = tune_step_size(step_size_x_, acc_rate / tune_interval_);
         X_acc_rate_ = arma::mat(num_nodes_, num_time_steps_, arma::fill::zeros);
 
+        // step size for intercept
+        acc_rate = std::min(acc_rate, intercept_acc_rate_);
+        step_size_intercept_ = tune_step_size(step_size_intercept_, acc_rate / tune_interval_);
+        intercept_acc_rate_ = 0.;
+
         // step size for beta_in
         acc_rate = std::min(beta_in_acc_rate_, beta_out_acc_rate_);
         step_size_beta_ = tune_step_size(step_size_beta_, acc_rate / tune_interval_);
@@ -567,6 +656,7 @@ namespace  lsmdn {
             X_.at(i) = sample_latent_positions(i);
 
             // beta_in / beta_out random walk metropolis
+            intercept_(i) = sample_intercept(i);
             beta_in_(i) = sample_beta_in(i);
             beta_out_(i) = sample_beta_out(i);
 
@@ -588,7 +678,7 @@ namespace  lsmdn {
             }
         }
 
-        return { tau_sq_, sigma_sq_, beta_in_, beta_out_, radii_, X_ };
+        return { tau_sq_, sigma_sq_, intercept_, beta_in_, beta_out_, radii_, X_ };
     }
 
 } // namespace lsmdn

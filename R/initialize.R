@@ -18,7 +18,7 @@ initialize_params <- function(Y, num_dimensions = 2) {
     X <- initialize_latent_positions(Y, num_dimensions)
     
     # intialize beta coefficients
-    c(beta_in, beta_out) %<-% initialize_beta(Y, X, radii)
+    c(beta_in, beta_out, intercept) %<-% initialize_beta(Y, X, radii)
     
     # prior for beta_in ~ N(beta_in, 100)
     nu_in <- beta_in
@@ -28,6 +28,9 @@ initialize_params <- function(Y, num_dimensions = 2) {
     nu_out <- beta_out
     xi_out <- 100
     
+    nu_intercept <- intercept
+    xi_intercept <- 100
+        
     # prior tau^2 ~ IG(shape, scale)
     tau_sq <- sum(X[, , 1] * X[, , 1]) / (n_nodes * num_dimensions)
     tau_shape <- 2.05
@@ -40,7 +43,9 @@ initialize_params <- function(Y, num_dimensions = 2) {
     
     list(Y_miss=Y_miss, 
          X=X, radii=radii, beta_in=beta_in, beta_out=beta_out,
+         intercept=intercept,
          nu_in=nu_in, xi_in=xi_in, nu_out=nu_out, xi_out=xi_out,
+         nu_intercept=nu_intercept, xi_intercept=xi_intercept,
          tau_sq=tau_sq, tau_shape=tau_shape, tau_scale=tau_scale,
          sigma_sq=sigma_sq, sigma_shape=sigma_shape, sigma_scale=sigma_scale)
 }
@@ -136,12 +141,19 @@ initialize_latent_positions <- function(Y, num_dimensions = 2, lambda = 10) {
 }
 
 initialize_beta <- function(Y, X, radii, eps = 1e-4) {
+    # group average of connection probability over time
+    p_hat <- rep(0, dim(Y)[3])
+    for(t in 1:dim(Y)[3]) {
+        p_hat[t] <- mean(Y[, , t], na.rm = TRUE)
+    }
+    intercept <- 1 / (1 + exp(-mean(p_hat)))
+    
     neg_log_likelihood <- function(beta) {
-        -lsmdn::lsmdn_log_likelihood(Y, X, radii, beta[1], beta[2])
+        -lsmdn::lsmdn_log_likelihood(Y, X, radii, beta[1], beta[2], intercept)
     }
     
     grad <- function(beta) {
-        -lsmdn::lsmdn_grad_beta(Y, X, radii, beta[1], beta[2])
+        -lsmdn::lsmdn_grad_beta(Y, X, radii, beta[1], beta[2], intercept)
     }
     
     result <- optim(par = c(1, 1), fn = neg_log_likelihood,
@@ -150,5 +162,5 @@ initialize_beta <- function(Y, X, radii, eps = 1e-4) {
     beta_in <- max(result$par[1], eps)
     beta_out <- max(result$par[2], eps)
     
-    list(beta_in, beta_out)
+    list(beta_in, beta_out, intercept)
 }

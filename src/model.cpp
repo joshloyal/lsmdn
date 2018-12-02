@@ -6,9 +6,10 @@ namespace lsmdn {
 
     DynamicLatentSpaceNetwork::DynamicLatentSpaceNetwork(
             const arma::cube &Y, const arma::cube &X, const arma::vec &radii,
-            double beta_in, double beta_out) :
+            double beta_in, double beta_out, double intercept) :
             Y_(Y), X_(X), radii_(radii), beta_in_(beta_in),
             beta_out_(beta_out), num_nodes_(X_.n_rows),
+            intercept_(intercept),
             num_dimensions_(X_.n_cols),
             num_time_steps_(X_.n_slices) {}
 
@@ -19,7 +20,7 @@ namespace lsmdn {
 
     double DynamicLatentSpaceNetwork::get_eta(double dx, int i, int j) {
         return beta_in_ * (1 - dx / radii_(j)) +
-                    beta_out_ * (1 - dx / radii_(i));
+                    beta_out_ * (1 - dx / radii_(i)) + intercept_;
     }
 
     double DynamicLatentSpaceNetwork::log_likelihood() {

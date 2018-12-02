@@ -55,8 +55,9 @@ arma::mat rdirichlet(const int num_samples,
 // [[Rcpp::export]]
 double lsmdn_log_likelihood(const arma::cube &Y, const arma::cube &X,
                             const arma::vec &radii, double beta_in,
-                            double beta_out) {
-    lsmdn::DynamicLatentSpaceNetwork model(Y, X, radii, beta_in, beta_out);
+                            double beta_out, double intercept) {
+    lsmdn::DynamicLatentSpaceNetwork model(
+        Y, X, radii, beta_in, beta_out, intercept);
     return model.log_likelihood();
 }
 
@@ -66,8 +67,9 @@ double lsmdn_log_likelihood(const arma::cube &Y, const arma::cube &X,
 // [[Rcpp::export]]
 arma::vec lsmdn_grad_beta(const arma::cube &Y, const arma::cube &X,
                           const arma::vec &radii, double beta_in,
-                          double beta_out) {
-    lsmdn::DynamicLatentSpaceNetwork model(Y, X, radii, beta_in, beta_out);
+                          double beta_out, double intercept) {
+    lsmdn::DynamicLatentSpaceNetwork model(
+        Y, X, radii, beta_in, beta_out, intercept);
     return model.grad_beta();
 }
 
@@ -146,10 +148,13 @@ Rcpp::List fit_latent_space_network(arma::cube &Y,
                                     const arma::vec &radii_init,
                                     const double beta_in,
                                     const double beta_out,
+                                    const double intercept,
                                     const double nu_in,
                                     const double xi_in,
                                     const double nu_out,
                                     const double xi_out,
+                                    const double nu_intercept,
+                                    const double xi_intercept,
                                     const double tau_sq,
                                     const double tau_shape,
                                     const double tau_scale,
@@ -161,15 +166,17 @@ Rcpp::List fit_latent_space_network(arma::cube &Y,
                                     const bool tune,
                                     unsigned int tune_interval,
                                     const double step_size_x,
+                                    const double step_size_intercept,
                                     const double step_size_beta,
                                     const double step_size_radii,
                                     const unsigned int seed) {
 
     lsmdn::DynamicLatentSpaceNetworkSampler model(
-        Y, Y_miss, X_init, radii_init, beta_in, beta_out, nu_in, xi_in, nu_out, xi_out,
+        Y, Y_miss, X_init, radii_init, beta_in, beta_out, intercept,
+        nu_in, xi_in, nu_out, xi_out, nu_intercept, xi_intercept,
         tau_sq, tau_shape, tau_scale, sigma_sq, sigma_shape, sigma_scale,
         num_samples, num_burn_in, tune, tune_interval,
-        step_size_x, step_size_beta, step_size_radii, seed);
+        step_size_x, step_size_intercept, step_size_beta, step_size_radii, seed);
 
     lsmdn::ParamSamples samples = model.sample();
 
@@ -180,6 +187,9 @@ Rcpp::List fit_latent_space_network(arma::cube &Y,
         Rcpp::Named("step_size_x") = model.get_step_size_x(),
         Rcpp::Named("tau_sq") = samples.tau_sq,
         Rcpp::Named("sigma_sq") = samples.sigma_sq,
+        Rcpp::Named("intercept") = samples.intercept,
+        Rcpp::Named("intercept_acc_rate") = model.get_intercept_acc_rate(),
+        Rcpp::Named("step_size_intercept") = model.get_step_size_intercept(),
         Rcpp::Named("beta_in") = samples.beta_in,
         Rcpp::Named("beta_in_acc_rate") = model.get_beta_in_acc_rate(),
         Rcpp::Named("beta_out") = samples.beta_out,

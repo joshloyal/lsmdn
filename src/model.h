@@ -9,7 +9,7 @@ namespace lsmdn {
     public:
         DynamicLatentSpaceNetwork(const arma::cube &Y, const arma::cube &X,
                                   const arma::vec &radii, double beta_in,
-                                  double beta_out);
+                                  double beta_out, double intercept = 0);
 
         double latent_distance(int i, int j, int t);
         double get_eta(double dx, int i, int j);
@@ -24,6 +24,7 @@ namespace lsmdn {
         const arma::vec &radii_;
         double beta_in_;
         double beta_out_;
+        double intercept_;
 
         unsigned int num_nodes_;
         unsigned int num_dimensions_;
