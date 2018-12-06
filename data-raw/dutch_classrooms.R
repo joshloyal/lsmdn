@@ -40,5 +40,10 @@ demographics$religion <- unlist(sapply(
                                           'non-christian-religion')[x + 1] }
 ))
 
+# assesment information
+assessment <- read.table(here::here("data-raw", "klas12b-advice.dat"),
+                         col.names = 'assessment')
+demographics$assessment <- assessment[-drop_indices, ]
+
 dutch <- list(Y=Y, demographics=demographics)
 devtools::use_data(dutch, overwrite = TRUE)
