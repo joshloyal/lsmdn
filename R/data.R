@@ -9,3 +9,8 @@
 #' @format 13 adjacency matrices with 111 nodes
 #' @source \url{http://www.economicswebinstitute.org/worldtrade.htm}
 "world_trade"
+
+#' Newcomb's Fraternity Network Binarized
+#' 
+#' @source \url{https://rdrr.io/cran/networkDynamic/man/Newcomb.html}
+"newcomb_adj"

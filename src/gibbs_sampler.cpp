@@ -123,6 +123,27 @@ namespace  lsmdn {
         }
     }
 
+    void DynamicLatentSpaceNetworkSampler::tune_step_sizes() {
+        // step size for X
+        double acc_rate = arma::min(arma::vectorise(X_acc_rate_));
+        step_size_x_ = tune_step_size(step_size_x_, acc_rate / tune_interval_);
+        X_acc_rate_ = arma::mat(num_nodes_, num_time_steps_, arma::fill::zeros);
+
+        // step size for beta_in
+        acc_rate = std::min(beta_in_acc_rate_, beta_out_acc_rate_);
+        step_size_beta_ = tune_step_size(
+            step_size_beta_, acc_rate / tune_interval_);
+        beta_in_acc_rate_ = 0.;
+        beta_out_acc_rate_ = 0.;
+
+        // step size for radii
+        acc_rate = radii_acc_rate_;
+        step_size_radii_ = tune_step_size_radii(
+            step_size_radii_, acc_rate / tune_interval_),
+        step_size_radii_ = std::min(step_size_radii_, 200000.);
+        radii_acc_rate_ = 0.;
+    }
+
     arma::cube DynamicLatentSpaceNetworkSampler::sample_latent_positions(
             unsigned int sample_index) {
         // samples latent positions for each time slice using a
@@ -139,6 +160,12 @@ namespace  lsmdn {
         // distance between node i and j in latent space
         double dij_prev;
         double dij_prop;
+
+        // etas
+        double etaij_prop;
+        double etaij_prev;
+        double etaji_prop;
+        double etaji_prev;
 
         // parameters from previous sample.
         // this is the first step in the metropolis-in-gibbs algorithm
@@ -173,25 +200,29 @@ namespace  lsmdn {
                         dij_prev = arma::norm(
                             Xit_prev - X_new.slice(t).row(j).t(), 2);
 
-                        accept_ratio += (dij_prev - dij_prop) *
-                            ((Y_(j, i, t) *
-                                (beta_in / radii(i) + beta_out / radii(j))) +
-                             (Y_(i, j, t) *
-                                (beta_in / radii(j) + beta_out / radii(i))));
+                        etaij_prop = beta_in * (1 - dij_prop / radii(j)) +
+                                     beta_out * (1 - dij_prop / radii(i));
+                        etaji_prop = beta_in * (1 - dij_prop / radii(i)) +
+                                     beta_out * (1 - dij_prop / radii(j));
 
-                        accept_ratio += std::log(
-                            1 + std::exp(beta_in * (1 - dij_prev / radii(i)) +
-                                         beta_out * (1 - dij_prev / radii(j))));
-                        accept_ratio += std::log(
-                            1 + std::exp(beta_in * (1 - dij_prev / radii(j)) +
-                                         beta_out * (1 - dij_prev / radii(i))));
+                        etaij_prev = beta_in * (1 - dij_prev / radii(j)) +
+                                     beta_out * (1 - dij_prev / radii(i));
+                        etaji_prev = beta_in * (1 - dij_prev / radii(i)) +
+                                     beta_out * (1 - dij_prev / radii(j));
 
-                        accept_ratio -= std::log(
-                            1 + std::exp(beta_in * (1 - dij_prop / radii(i)) +
-                                         beta_out * (1 - dij_prop / radii(j))));
-                        accept_ratio -= std::log(
-                            1 + std::exp(beta_in * (1 - dij_prop / radii(j)) +
-                                         beta_out * (1 - dij_prop / radii(i))));
+                        // pij
+                        accept_ratio += Y_(i, j, t) * etaij_prop;
+                        accept_ratio -= std::log(1 + std::exp(etaij_prop));
+
+                        accept_ratio -= Y_(i, j, t) * etaij_prev;
+                        accept_ratio += std::log(1 + std::exp(etaij_prev));
+
+                        // pji
+                        accept_ratio += Y_(j, i, t) * etaji_prop;
+                        accept_ratio -= std::log(1 + std::exp(etaji_prop));
+
+                        accept_ratio -= Y_(j, i, t) * etaji_prev;
+                        accept_ratio += std::log(1 + std::exp(etaji_prev));
                     }
                 } // loop j
 
@@ -202,23 +233,23 @@ namespace  lsmdn {
                     accept_ratio +=
                         arma::as_scalar((Xit_prev.t() * Xit_prev) / (2 * tau_sq));
                 } else { // pi(X_t | X_{t-1})
-                    arma::vec Xit_1 = X_new.slice(t - 1).row(i).t();
+                    arma::vec Xit_past = X_new.slice(t - 1).row(i).t();
                     accept_ratio  -=
-                        arma::as_scalar((Xit_prop - Xit_1).t() * (Xit_prop - Xit_1) /
+                        arma::as_scalar((Xit_prop - Xit_past).t() * (Xit_prop - Xit_past) /
                             (2 * sigma_sq));
                     accept_ratio  +=
-                        arma::as_scalar((Xit_prev - Xit_1).t() * (Xit_prev - Xit_1) /
+                        arma::as_scalar((Xit_prev - Xit_past).t() * (Xit_prev - Xit_past) /
                             (2 * sigma_sq));
                 }
 
                 // pi(X_{t+1} | X_t)
                 if (t < num_time_steps_ - 1) {
-                    arma::vec Xit_1 = X_new.slice(t + 1).row(i).t();
+                    arma::vec Xit_fut = X_new.slice(t + 1).row(i).t();
                     accept_ratio  -=
-                        arma::as_scalar((Xit_1 - Xit_prop).t() * (Xit_1 - Xit_prop) /
+                        arma::as_scalar((Xit_fut - Xit_prop).t() * (Xit_fut - Xit_prop) /
                             (2 * sigma_sq));
                     accept_ratio  +=
-                        arma::as_scalar((Xit_1 - Xit_prev).t() * (Xit_1 - Xit_prev) /
+                        arma::as_scalar((Xit_fut - Xit_prev).t() * (Xit_fut - Xit_prev) /
                             (2 * sigma_sq));
 
                 }
@@ -243,24 +274,20 @@ namespace  lsmdn {
         } // loop t
 
         // center across nodes and time steps
-        //for (int t = 0; t < num_time_steps_; ++t) {
-        //    X_new.slice(t).each_row() -= arma::mean(X_new.slice(t));
-        //}
-        // center across nodes and time steps
         arma::cube col_means =
             arma::sum(arma::sum(X_new, 0), 2) / (num_time_steps_ * num_nodes_);
         for (unsigned int t = 0; t < num_time_steps_; ++t) {
             X_new.slice(t).each_row() -= col_means.slice(0);
         }
 
-        // rocrustes transformation if we are past the burn-in period
+        // procrustes transformation if we are past the burn-in period
         if (sample_index > num_burn_in_) {
-            arma::mat X0 = flatten_cube(X_.at(num_burn_in_));
-            arma::mat Xl = flatten_cube(X_new);
-            arma::mat X_proc = procrustes(X0, Xl);
+            arma::mat X_ref = flatten_cube(X_.at(num_burn_in_));
+            arma::mat X_new_flat = flatten_cube(X_new);
+            arma::mat X_proc = procrustes(X_ref, X_new_flat);
             for(unsigned int t = 0; t < num_time_steps_; ++t) {
                 X_new.slice(t) = X_proc.rows(
-                    t * num_nodes_, ((t + 1) * num_nodes_) - 1);
+                    t * num_nodes_, (t + 1) * num_nodes_ - 1);
             }
         }
 
@@ -294,15 +321,15 @@ namespace  lsmdn {
                         dij = arma::norm(
                             X.slice(t).row(i) - X.slice(t).row(j), 2);
                         eta_prop = beta_in_prop * (1 - dij / radii(j)) +
-                            beta_out * (1 - dij / radii(i));
+                                   beta_out * (1 - dij / radii(i));
                         eta_prev = beta_in_prev * (1 - dij / radii(j)) +
-                            beta_out * (1 - dij / radii(i));
+                                   beta_out * (1 - dij / radii(i));
 
-                        accept_ratio += (Y_(i, j, t) *
-                            (beta_in_prop - beta_in_prev) *
-                                (1 - dij / radii(j))) -
-                            std::log(1 + std::exp(eta_prop)) +
-                            std::log(1 + std::exp(eta_prev));
+                        accept_ratio += Y_(i, j, t) * eta_prop;
+                        accept_ratio -= std::log(1 + std::exp(eta_prop));
+
+                        accept_ratio -= Y_(i, j, t) * eta_prev;
+                        accept_ratio += std::log(1 + std::exp(eta_prev));
                     }
                 }
             }
@@ -349,15 +376,15 @@ namespace  lsmdn {
                         dij = arma::norm(
                             X.slice(t).row(i) - X.slice(t).row(j), 2);
                         eta_prop = beta_in * (1 - dij / radii(j)) +
-                            beta_out_prop * (1 - dij / radii(i));
+                                   beta_out_prop * (1 - dij / radii(i));
                         eta_prev = beta_in * (1 - dij / radii(j)) +
-                            beta_out_prev * (1 - dij / radii(i));
+                                   beta_out_prev * (1 - dij / radii(i));
 
-                        accept_ratio += (Y_(i, j, t) *
-                            (beta_out_prop - beta_out_prev) *
-                                (1 - dij / radii(i))) -
-                            std::log(1 + std::exp(eta_prop)) +
-                            std::log(1 + std::exp(eta_prev));
+                        accept_ratio += Y_(i, j, t) * eta_prop;
+                        accept_ratio -= std::log(1 + std::exp(eta_prop));
+
+                        accept_ratio -= Y_(i, j, t) * eta_prev;
+                        accept_ratio += std::log(1 + std::exp(eta_prev));
                     }
                 }
             }
@@ -451,14 +478,16 @@ namespace  lsmdn {
                     if(i != j) {
                         dij = arma::norm(
                             X.slice(t).row(i) - X.slice(t).row(j), 2);
-                        eta_prev = beta_in * (1 - dij / radii_prev(j)) +
-                            beta_out * (1 - dij / radii_prev(i));
                         eta_prop = beta_in * (1 - dij / radii_prop(j)) +
-                            beta_out * (1 - dij / radii_prop(i));
+                                   beta_out * (1 - dij / radii_prop(i));
+                        eta_prev = beta_in * (1 - dij / radii_prev(j)) +
+                                   beta_out * (1 - dij / radii_prev(i));
 
-                        accept_ratio += Y_(i, j, t) * (eta_prop - eta_prev);
-                        accept_ratio += std::log(1 + std::exp(eta_prev)) -
-                            std::log(1 + std::exp(eta_prop));
+                        accept_ratio += Y_(i, j, t) * eta_prop;
+                        accept_ratio -= std::log(1 + std::exp(eta_prop));
+
+                        accept_ratio -= Y_(i, j, t) * eta_prev;
+                        accept_ratio += std::log(1 + std::exp(eta_prev));
                     }
                 }
             }
@@ -467,7 +496,8 @@ namespace  lsmdn {
         // transition equation ratio
         for(unsigned int i = 0; i < num_nodes_; ++i) {
             accept_ratio +=
-                (step_size_radii_ * radii_prop(i) - 1) * std::log(radii_prev(i)) -
+                (step_size_radii_ * radii_prop(i) - 1) * std::log(radii_prev(i));
+            accept_ratio -=
                 (step_size_radii_ * radii_prev(i) - 1) * std::log(radii_prop(i));
 
             // first-two terms taylor expansion (why use this?)
@@ -481,8 +511,9 @@ namespace  lsmdn {
             //        step_size_radii_ * radii_prev(i);
 
             // use actual log-gamma function for normalizing constant
-            accept_ratio += std::lgamma(step_size_radii_ * radii_prev(i)) -
-                std::lgamma(step_size_radii_ * radii_prop(i));
+            accept_ratio -= std::lgamma(step_size_radii_ * radii_prop(i));
+            accept_ratio += std::lgamma(step_size_radii_ * radii_prev(i));
+
         }
 
         // accept / reject
@@ -541,38 +572,18 @@ namespace  lsmdn {
         }
     }
 
-    void DynamicLatentSpaceNetworkSampler::tune_step_sizes() {
-        // step size for X
-        double acc_rate = arma::min(arma::vectorise(X_acc_rate_));
-        step_size_x_ = tune_step_size(step_size_x_, acc_rate / tune_interval_);
-        X_acc_rate_ = arma::mat(num_nodes_, num_time_steps_, arma::fill::zeros);
-
-        // step size for beta_in
-        acc_rate = std::min(beta_in_acc_rate_, beta_out_acc_rate_);
-        step_size_beta_ = tune_step_size(step_size_beta_, acc_rate / tune_interval_);
-        beta_in_acc_rate_ = 0.;
-        beta_out_acc_rate_ = 0.;
-
-        // step size for radii
-        acc_rate = radii_acc_rate_;
-        step_size_radii_ = tune_step_size_radii(
-            step_size_radii_, acc_rate / tune_interval_),
-        step_size_radii_ = std::min(step_size_radii_, 200000.);
-        radii_acc_rate_ = 0.;
-    }
-
     ParamSamples DynamicLatentSpaceNetworkSampler::sample() {
         for(unsigned int i = 1; i < num_samples_; ++i) {
             // latent positions random walk metropolis
             X_.at(i) = sample_latent_positions(i);
 
-            // beta_in / beta_out random walk metropolis
-            beta_in_(i) = sample_beta_in(i);
-            beta_out_(i) = sample_beta_out(i);
-
             // tau_sq / sigma_sq gibbs sample
             tau_sq_(i) = sample_tau_sq(i);
             sigma_sq_(i) = sample_sigma_sq(i);
+
+            // beta_in / beta_out random walk metropolis
+            beta_in_(i) = sample_beta_in(i);
+            beta_out_(i) = sample_beta_out(i);
 
             // radii metropolis-hastings with a nonsymmetric dirichlet proposal
             radii_.row(i) = sample_radii(i);
@@ -580,7 +591,7 @@ namespace  lsmdn {
             // sample missing values
             sample_Y_miss(i);
 
-            if(tune_ && steps_until_tune_ == 0 && i < num_burn_in_) {
+            if(tune_ && (steps_until_tune_ == 0) && (i < num_burn_in_)) {
                 tune_step_sizes();
                 steps_until_tune_ = tune_interval_;
             } else {

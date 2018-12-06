@@ -60,6 +60,61 @@ impute_na <- function(Y) {
     list(Y, Y_miss)
 }
 
+impute_na2 <- function(Y, seed = 1) {
+    set.seed(1)
+    num_nodes <- dim(Y)[1]
+    num_time_steps <- dim(Y)[3]
+    
+    # determine indices of missing nodes
+    Y_miss <- matrix(0, nrow = num_time_steps, ncol = num_nodes)
+    missing_indices <- list()
+    for(t in 1:num_time_steps) {
+        na_indices <- unique(which(is.na(Y[, , t]), arr.ind = TRUE)[, 1])
+        if(length(na_indices) > 0) {
+            Y_miss[t, na_indices] <- 1
+        }
+        missing_indices[[t]] <- na_indices
+    }
+    Y[which(is.na(Y), arr.ind = TRUE)] <- 0
+    
+    Y_agg <- array(0, dim(Y[,,1]))
+    for(t in 1:num_time_steps) {
+        Y_agg <- Y_agg + Y[, , t]
+    }
+    Y_agg[which(Y_agg > 1, arr.ind = TRUE)] <- 1
+    path_agg <- igraph::shortest.paths(
+        graph = igraph::graph.adjacency(Y_agg), mode = 'all'
+    )
+    path_agg[which(path_agg == Inf, arr.ind = TRUE)] <- 5
+
+    out_deg <- in_deg <- denom <- numeric(num_nodes)
+    for(t in 1:num_time_steps) {
+        denom[c(1:num_nodes)[-missing_indices[[t]]]] <-  
+            denom[c(1:num_nodes)[-missing_indices[[t]]]] + 1
+        if(length(missing_indices[[t]]) == 0) {
+            denom <- denom + 1
+        }
+        in_deg <- in_deg + 
+            colSums(Y[, , t]) / 
+                (num_nodes-1-length(missing_indices[[t]]) +
+                     as.numeric(1:num_nodes%in%missing_indices[[t]]))*(num_nodes-1)
+        out_deg <- out_deg + rowSums(Y[,,t])
+    }
+    in_deg <- in_deg / num_time_steps
+    out_deg <- round(out_deg / denom)
+    
+    for(t in 1:num_time_steps) {
+        for(i in missing_indices[[t]]) {
+            probs <- in_deg[-i] / path_agg[i, -i]
+            ind <- sample(size = out_deg[i], x = c(1:num_nodes)[-i], 
+                          prob = probs, replace = FALSE)
+            Y[ind, i , t] <- Y[i, ind, t] <- 1
+        }
+    }
+    
+    list(Y=Y, Y_miss=Y_miss)
+}
+
 
 initialize_radii <- function(Y, eps = 1e-5) {
     n_nodes <- dim(Y)[1]

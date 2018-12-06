@@ -27,12 +27,13 @@ convert_to_tidy_graph <- function(dutch, t) {
         mutate(ethnicity = dutch$demographics$ethnicity) %>% 
         mutate(religion = dutch$demographics$religion) %>% 
         mutate(missing = is.na(dutch$Y[,3,t])) %>% 
+        mutate(label = 1:25) %>% 
         #arrange(sex) %>% 
         # plotting attributes
         mutate(color = ifelse(sex == 'boy', sex_colors[2], sex_colors[1])) %>% 
         mutate(shape = ifelse(ethnicity == 'dutch', 'circle', 'square')) %>% 
         mutate(label.cex = 0.5) %>%
-        mutate(label.color = 'black') %>% 
+        mutate(label.color = 'white') %>% 
         mutate(frame.color = ifelse(missing, 'black', 'white')) %>% 
         activate(edges) %>% 
         mutate(arrow.size = 0.3) 
@@ -49,7 +50,7 @@ l <- layout_with_fr(graph)
 
 for(t in 1:4) {
     graph <- convert_to_tidy_graph(dutch, t = t) 
-    plot(graph, layout = l)
+    plot(graph)#, layout = l)
     text(x = -1.5, y = 1, paste0("t = ", t))
 }
 ```
@@ -57,17 +58,74 @@ for(t in 1:4) {
 ```{r circle}
 par(mfrow=c(2, 2), mar=c(0, 0, 0, 0))
 
+graph <- convert_to_tidy_graph(dutch, t = 1)
+l <- layout_in_circle(graph)
+
 for(t in 1:4) {
-    graph <- convert_to_tidy_graph(dutch, t = t) %>% 
-        activate(nodes) %>% 
-        arrange(sex)
+    graph <- convert_to_tidy_graph(dutch, t = t) #%>% 
+        #activate(nodes) %>% 
+        #arrange(sex)
     
-    plot(graph, layout = igraph::layout_in_circle)
+    plot(graph, layout = l)
     text(x = -1.5, y = 1, paste0("t = ", t))
 }
 ```
-```{r degree_dist}
-degree_tbl <- tibble(
-    degree = degree(convert_to_tidy_graph(dutch, t = 2))
-)
+```{r load_model}
+# model <- lsmdn(dutch$Y, num_samples = 500000)
+model <- readRDS('dutch.model')
+```
+
+```{r plot_latent_positions}
+xl <- c(1.15 * min(model$X[,1,]), 1.15 * max(model$X[,1,]))
+yl <- c(1.15 * min(model$X[,2,]), 1.15 * max(model$X[,2,]))
+lims <- range(c(xl , yl))
+
+num_time_steps <- dim(model$X)[3]
+num_nodes <- dim(model$X)[1]
+color_assesment = rep(1, num_nodes)
+color_assesment[dutch$demographics$assessment == 4] = 2 
+color_assesment[dutch$demographics$assessment == 8] = 3
+
+
+
+#for(t in 13:num_time_steps) {
+#    arrows(model$X[,1,t-1], model$X[,2,t-1],
+#           model$X[,1,t], model$X[,2,t],
+#           length=0.1)
+#}
+
+t = 14
+xl <- c(1.15 * min(model$X[,1,t]), 1.15 * max(model$X[,1,t]))
+yl <- c(1.15 * min(model$X[,2,t]), 1.15 * max(model$X[,2,t]))
+lims <- range(c(xl , yl))
+plot(1, type="n", xlab="", ylab="", xlim=lims, ylim=lims, xaxt = 'n', yaxt = 'n', frame.plot = FALSE)
+
+
+alpha = 0.7
+points(model$X[, 1, t], model$X[, 2, t], pch = 21,
+       cex = 2, xlim = lims, ylim = lims,
+       bg = adjustcolor('darkorange', alpha.f = alpha))
+     #pch = ifelse(dutch$demographics$ethnicity == 'dutch', 21, 22), 
+     #cex = 2, xlim = lims, ylim = lims,
+     #bg = ifelse(
+     #    dutch$demographics$sex == 'girl', 
+     #    adjustcolor('darkorange', alpha.f = alpha),
+     #    adjustcolor('steelblue', alpha)
+     #),
+     #col = c('white', 'red', 'black')[color_assesment])
+text(model$X[, 1, t], model$X[, 2, t], labels = 1:nrow(model$X[,1,]), col = 'white', cex = 0.4)
+
+```
+
+```{r synthetic_data}
+n_iter <- 5
+
+models <- list()
+datasets <- list()
+for(i in 1:n_iter) {
+    data <- synthetic_network(num_nodes = 25, num_time_steps = 5, seed = i * 7)
+    model <- lsmdn(data$Y)
+    datasets[[i]] <- data
+    models[[i]] <- models
+}
 ```
