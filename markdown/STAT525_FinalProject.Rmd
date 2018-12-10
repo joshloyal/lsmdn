@@ -22,6 +22,91 @@ doMC::registerDoMC(cores = parallel::detectCores())
 library(lsmdn)
 ```
 
+## Synthetic Networks
+
+```{r synthetic_data_fitting}
+n_iter <- 8
+
+results <- foreach(i = 1:n_iter) %dopar% {
+    data <- synthetic_network(num_nodes = 100, num_time_steps = 5, seed = i * 7)
+    model <- lsmdn(data$Y)
+    list(data = data, model = model)
+}
+```
+
+```{r synthetic_summaries}
+# mean of beta_in
+beta_ins <- rep(0, n_iter)
+for (i in 1:n_iter) {
+    beta_ins[i] <- results[[i]]$model$beta_in
+}
+print("Beta In:")
+print(mean(beta_ins))
+print(sd(beta_ins))
+
+
+# mean of beta_in
+beta_outs <- rep(0, n_iter)
+for (i in 1:n_iter) {
+    beta_outs[i] <- results[[i]]$model$beta_out
+}
+print("Beta Out:")
+print(mean(beta_outs))
+print(sd(beta_outs))
+
+# correlation of radii
+radii_cor <- rep(0, n_iter)
+for (i in 1:n_iter) {
+    radii_fit <-  results[[i]]$model$radii
+    radii_true <- results[[i]]$data$radii
+    radii_cor[i] <- cor(radii_fit, radii_true)
+}
+print("Radii:")
+print(mean(radii_cor))
+print(sd(radii_cor))
+
+# aucs 
+aucs <- rep(0, n_iter)
+for (i in 1:n_iter) {
+    aucs[i] <- auc(results[[i]]$model)
+}
+print("AUCs:")
+print(mean(aucs))
+print(sd(aucs))
+```
+
+```{r distance_comparison}
+for(id in 1:8) {
+    X_fit <- results[[id]]$model$X
+    X_true <- results[[id]]$data$X
+
+    num_time_steps <- dim(X_fit)[3]
+    D_ratio <- 0
+    for(t in num_time_steps) {
+        D_fit <- as.vector(dist(X_fit[, , t]))
+        D_true <- as.vector(dist(X_true[, , t]))
+
+        keep_ids <- D_true > 1e-4
+        D_fit <- D_fit[keep_ids]
+        D_true <- D_true[keep_ids]
+    
+        D_ratio <- c(D_ratio, D_fit/D_true)
+    }
+    dens <- density(D_ratio, bw = "nrd")
+    if(id == 1) {
+        plot(dens, xlim = c(-1, 5), ylim = c(0, 3), 
+             xlab="Distance Ratio",
+             ylab="", main="",
+             yaxt = 'n', frame.plot = FALSE, 
+             col = adjustcolor('steelblue', alpha = 0.8))
+    } else {
+        lines(dens, col = adjustcolor('steelblue', alpha = 0.8))
+    }
+}
+```
+
+## Dutch Classroom Example
+
 ```{r format_dutch}
 convert_to_tidy_graph <- function(dutch, t) {
     sex_colors <- c(adjustcolor('darkorange', alpha.f = 0.9), adjustcolor('steelblue', 0.9))
@@ -171,82 +256,3 @@ text(model$X[, 1, t], model$X[, 2, t], labels = 1:nrow(model$X[,1,]), col = 'whi
 
 ```
 
-```{r synthetic_data_fitting}
-n_iter <- 8
-
-results <- foreach(i = 1:n_iter) %dopar% {
-    data <- synthetic_network(num_nodes = 100, num_time_steps = 5, seed = i * 7)
-    model <- lsmdn(data$Y)
-    list(data = data, model = model)
-}
-```
-
-```{r synthetic_summaries}
-# mean of beta_in
-beta_ins <- rep(0, n_iter)
-for (i in 1:n_iter) {
-    beta_ins[i] <- results[[i]]$model$beta_in
-}
-print("Beta In:")
-print(mean(beta_ins))
-print(sd(beta_ins))
-
-
-# mean of beta_in
-beta_outs <- rep(0, n_iter)
-for (i in 1:n_iter) {
-    beta_outs[i] <- results[[i]]$model$beta_out
-}
-print("Beta Out:")
-print(mean(beta_outs))
-print(sd(beta_outs))
-
-# correlation of radii
-radii_cor <- rep(0, n_iter)
-for (i in 1:n_iter) {
-    radii_fit <-  results[[i]]$model$radii
-    radii_true <- results[[i]]$data$radii
-    radii_cor[i] <- cor(radii_fit, radii_true)
-}
-print("Radii:")
-print(mean(radii_cor))
-print(sd(radii_cor))
-
-# aucs 
-aucs <- rep(0, n_iter)
-for (i in 1:n_iter) {
-    aucs[i] <- auc(results[[i]]$model)
-}
-print("AUCs:")
-print(mean(aucs))
-print(sd(aucs))
-```
-```{r distance_comparison}
-for(id in 1:8) {
-    X_fit <- results[[id]]$model$X
-    X_true <- results[[id]]$data$X
-
-    num_time_steps <- dim(X_fit)[3]
-    D_ratio <- 0
-    for(t in num_time_steps) {
-        D_fit <- as.vector(dist(X_fit[, , t]))
-        D_true <- as.vector(dist(X_true[, , t]))
-
-        keep_ids <- D_true > 1e-4
-        D_fit <- D_fit[keep_ids]
-        D_true <- D_true[keep_ids]
-    
-        D_ratio <- c(D_ratio, D_fit/D_true)
-    }
-    dens <- density(D_ratio, bw = "nrd")
-    if(id == 1) {
-        plot(dens, xlim = c(-1, 5), ylim = c(0, 3), 
-             xlab="Distance Ratio",
-             ylab="", main="",
-             yaxt = 'n', frame.plot = FALSE, 
-             col = adjustcolor('steelblue', alpha = 0.8))
-    } else {
-        lines(dens, col = adjustcolor('steelblue', alpha = 0.8))
-    }
-}
-```
