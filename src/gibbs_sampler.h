@@ -64,9 +64,6 @@ public:
     double get_step_size_beta() { return step_size_beta_; }
     double get_step_size_radii() { return step_size_radii_; }
 
-    arma::vec get_step_sizes_beta() {
-        return arma::conv_to<arma::vec>::from(step_sizes_beta_); }
-
     // acceptance rates
     arma::mat get_X_acc_rate() { return X_acc_rate_ / num_samples_; }
     double get_beta_in_acc_rate() { return beta_in_acc_rate_ / num_samples_; }
@@ -118,7 +115,6 @@ private:
     // step sizes for random walk metropolis
     double step_size_x_;
     double step_size_beta_;
-    std::vector<double> step_sizes_beta_;
     double step_size_radii_;
 
     // acceptance rates

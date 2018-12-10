@@ -115,8 +115,6 @@ namespace  lsmdn {
         for(unsigned int t = 0; t < num_time_steps_; ++t) {
             Y_miss_.push_back(arma::find(Y_miss.row(t) != 0));
         }
-
-        step_sizes_beta_.push_back(step_size_beta_);
     }
 
     void DynamicLatentSpaceNetworkSampler::tune_step_sizes() {
@@ -129,7 +127,6 @@ namespace  lsmdn {
         acc_rate = std::min(beta_in_acc_rate_, beta_out_acc_rate_);
         step_size_beta_ = tune_step_size(
             step_size_beta_, acc_rate / tune_interval_);
-        step_sizes_beta_.push_back(step_size_beta_);
         beta_in_acc_rate_ = 0.;
         beta_out_acc_rate_ = 0.;
 
