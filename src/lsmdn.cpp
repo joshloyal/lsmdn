@@ -185,6 +185,7 @@ Rcpp::List fit_latent_space_network(arma::cube &Y,
         Rcpp::Named("beta_out") = samples.beta_out,
         Rcpp::Named("beta_out_acc_rate") = model.get_beta_out_acc_rate(),
         Rcpp::Named("step_size_beta") =  model.get_step_size_beta(),
+        Rcpp::Named("step_sizes_beta") = model.get_step_sizes_beta(),
         Rcpp::Named("radii") = samples.radii,
         Rcpp::Named("radii_acc_rate") = model.get_radii_acc_rate(),
         Rcpp::Named("step_size_radii") = model.get_step_size_radii()

@@ -34,7 +34,7 @@ initialize_params <- function(Y, num_dimensions = 2) {
     tau_scale <- (tau_shape - 1) * tau_sq
     
     # prior sigma^2 ~ IG(shape, scale)
-    sigma_sq <- 0.001
+    sigma_sq <- 0.1
     sigma_shape <- 9
     sigma_scale <- 1.5
     

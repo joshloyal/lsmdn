@@ -12,13 +12,13 @@ namespace  lsmdn {
             step_size *= 0.1;
         } else if (acc_rate < 0.05) {
             step_size *= 0.5;
-        } else if (acc_rate < 0.2) {
+        } else if (acc_rate < 0.25) {
             step_size *= 0.9;
         } else if (acc_rate > 0.95) {
             step_size *= 10.0;
         } else if (acc_rate > 0.75) {
             step_size *= 2.0;
-        } else if (acc_rate > 0.5) {
+        } else if (acc_rate > 0.35) {
             step_size *= 1.1;
         }
 
@@ -31,13 +31,13 @@ namespace  lsmdn {
             step_size *= 10.0;
         } else if (acc_rate < 0.05) {
             step_size *= 2.0;
-        } else if (acc_rate < 0.2) {
+        } else if (acc_rate < 0.25) {
             step_size *= 1.1;
         } else if (acc_rate > 0.95) {
             step_size *= 0.1;
         } else if (acc_rate > 0.75) {
             step_size *= 0.5;
-        } else if (acc_rate > 0.5) {
+        } else if (acc_rate > 0.35) {
             step_size *= 0.9;
         }
 
@@ -68,8 +68,7 @@ namespace  lsmdn {
             const double step_size_x,
             const double step_size_beta,
             const double step_size_radii,
-            unsigned int seed,
-            bool debug) :
+            unsigned int seed) :
             Y_(Y),
             num_samples_(num_samples),
             num_burn_in_(num_burn_in),
@@ -101,12 +100,7 @@ namespace  lsmdn {
             X_acc_rate_(num_nodes_, num_time_steps_, arma::fill::zeros),
             beta_in_acc_rate_(0),
             beta_out_acc_rate_(0),
-            radii_acc_rate_(0),
-            debug_(debug),
-            rnorms_X_(num_nodes_ * num_time_steps_, num_dimensions_,
-                     arma::fill::zeros),
-            runifs_X_(num_nodes_ * num_time_steps_, arma::fill::zeros),
-            accept_ratio_X_(num_nodes_ * num_time_steps_, arma::fill::zeros) {
+            radii_acc_rate_(0) {
 
         // set initial values
         tau_sq_(0) = tau_sq;
@@ -121,6 +115,8 @@ namespace  lsmdn {
         for(unsigned int t = 0; t < num_time_steps_; ++t) {
             Y_miss_.push_back(arma::find(Y_miss.row(t) != 0));
         }
+
+        step_sizes_beta_.push_back(step_size_beta_);
     }
 
     void DynamicLatentSpaceNetworkSampler::tune_step_sizes() {
@@ -133,6 +129,7 @@ namespace  lsmdn {
         acc_rate = std::min(beta_in_acc_rate_, beta_out_acc_rate_);
         step_size_beta_ = tune_step_size(
             step_size_beta_, acc_rate / tune_interval_);
+        step_sizes_beta_.push_back(step_size_beta_);
         beta_in_acc_rate_ = 0.;
         beta_out_acc_rate_ = 0.;
 
@@ -183,11 +180,6 @@ namespace  lsmdn {
                 Xit_prev = X_.at(sample_index - 1).slice(t).row(i).t();
                 epsilon = rnorm_.sample(2);
                 Xit_prop = Xit_prev + step_size_x_ * epsilon;
-
-                // store random state for debugging
-                if(debug_) {
-                    rnorms_X_.row(t * num_nodes_ + i) = epsilon.t();
-                }
 
                 // calculate acceptance ratio (pi(Xit_prop)/pi(Xit_old))
                 accept_ratio = 0.;
@@ -254,17 +246,8 @@ namespace  lsmdn {
 
                 }
 
-                if (debug_) {
-                    accept_ratio_X_(t * num_nodes_ + i) = accept_ratio;
-                }
-
                 // accept / reject
                 double u = runif_.single_sample();
-
-                // store uniform draw for testing
-                if (debug_) {
-                    runifs_X_(t * num_nodes_ + i) = u;
-                }
 
                 if(std::log(u) < accept_ratio) {
                     X_new.slice(t).row(i) = Xit_prop.t();
@@ -274,10 +257,10 @@ namespace  lsmdn {
         } // loop t
 
         // center across nodes and time steps
-        arma::cube col_means =
+        arma::cube space_mean =
             arma::sum(arma::sum(X_new, 0), 2) / (num_time_steps_ * num_nodes_);
         for (unsigned int t = 0; t < num_time_steps_; ++t) {
-            X_new.slice(t).each_row() -= col_means.slice(0);
+            X_new.slice(t).each_row() -= space_mean.slice(0);
         }
 
         // procrustes transformation if we are past the burn-in period
@@ -495,22 +478,14 @@ namespace  lsmdn {
 
         // transition equation ratio
         for(unsigned int i = 0; i < num_nodes_; ++i) {
+            // ratio of dirichlets
             accept_ratio +=
                 (step_size_radii_ * radii_prop(i) - 1) * std::log(radii_prev(i));
             accept_ratio -=
                 (step_size_radii_ * radii_prev(i) - 1) * std::log(radii_prop(i));
 
-            // first-two terms taylor expansion (why use this?)
-            //accept_ratio -=
-            //    (step_size_radii_ * radii_prop(i) - 0.5) *
-            //        std::log(step_size_radii_ * radii_prop(i)) -
-            //        step_size_radii_ * radii_prop(i);
-            //accept_ratio +=
-            //    (step_size_radii_ * radii_prev(i) - 0.5) *
-            //        std::log(step_size_radii_ * radii_prev(i)) -
-            //        step_size_radii_ * radii_prev(i);
-
-            // use actual log-gamma function for normalizing constant
+            // ratio of normalizing constansts. Note that sum of alpha
+            // is the same for both transition equations so cancels out.
             accept_ratio -= std::lgamma(step_size_radii_ * radii_prop(i));
             accept_ratio += std::lgamma(step_size_radii_ * radii_prev(i));
 

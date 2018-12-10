@@ -12,7 +12,6 @@ namespace lsmdn {
             num_dimensions_(X_.n_cols),
             num_time_steps_(X_.n_slices) {}
 
-    // could cache this
     double DynamicLatentSpaceNetwork::latent_distance(int i, int j, int t) {
         return arma::norm(X_.slice(t).row(i) - X_.slice(t).row(j), 2);
     }

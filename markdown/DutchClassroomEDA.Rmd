@@ -9,8 +9,15 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 
 library(igraph)
+library(here)
 library(tidygraph)
 library(zeallot)
+library(foreach)
+library(doMC)
+library(latex2exp)
+library(coda)
+
+doMC::registerDoMC(cores = parallel::detectCores())
 
 library(lsmdn)
 ```
@@ -71,8 +78,41 @@ for(t in 1:4) {
 }
 ```
 ```{r load_model}
-# model <- lsmdn(dutch$Y, num_samples = 500000)
-model <- readRDS('dutch.model')
+# The fit takes roughly 10 mins, so just laod from a file
+# model <- lsmdn(dutch$Y, num_samples = 1000000)
+model <- readRDS(here::here('dutch_1mil_v2.model'))
+
+# originally the burn-in was 15% however, there was still some visible
+# non-stationarity so another 100,000 samples were removed
+model <- trim(model, num_samples = 100000)
+```
+
+```{r trace_plots}
+par(mfrow = c(2, 2))
+
+plot(model$samples$beta_in, type = 'l', xlab = '', ylab = '', main = TeX("$\\beta_{in}$"))
+plot(model$samples$beta_out, type = 'l', xlab = '', ylab = '', main = TeX("$\\beta_{out}$"))
+plot(model$samples$tau_sq, type = 'l', xlab = '', ylab = '', main = TeX("$\\tau^2$"))
+plot(model$samples$sigma_sq, type = 'l', xlab = '', ylab = '', main = TeX("$\\sigma^2$"))
+```
+```{r summary statistics}
+beta_in <- coda::mcmc(model$samples$beta_in)
+summary(beta_in)
+coda::geweke.diag(beta_in)
+
+beta_out <- coda::mcmc(model$samples$beta_out)
+summary(beta_out)
+coda::geweke.diag(beta_out)
+
+tau_sq <- coda::mcmc(model$samples$tau_sq)
+summary(tau_sq)
+coda::geweke.diag(tau_sq)
+
+sigma_sq <- coda::mcmc(model$samples$sigma_sq)
+summary(sigma_sq)
+coda::geweke.diag(sigma_sq)
+
+auc(model)
 ```
 
 ```{r plot_latent_positions}
@@ -87,45 +127,113 @@ color_assesment[dutch$demographics$assessment == 4] = 2
 color_assesment[dutch$demographics$assessment == 8] = 3
 
 
+plot(1, type="n", xlab="", ylab="", xlim=lims, ylim=lims, xaxt = 'n', yaxt = 'n')
+for(t in 2:num_time_steps) {
+    arrows(model$X[,1,t-1], model$X[,2,t-1],
+           model$X[,1,t], model$X[,2,t],
+           length=0.1)
+}
 
-#for(t in 13:num_time_steps) {
-#    arrows(model$X[,1,t-1], model$X[,2,t-1],
-#           model$X[,1,t], model$X[,2,t],
-#           length=0.1)
-#}
-
-t = 14
-xl <- c(1.15 * min(model$X[,1,t]), 1.15 * max(model$X[,1,t]))
-yl <- c(1.15 * min(model$X[,2,t]), 1.15 * max(model$X[,2,t]))
-lims <- range(c(xl , yl))
-plot(1, type="n", xlab="", ylab="", xlim=lims, ylim=lims, xaxt = 'n', yaxt = 'n', frame.plot = FALSE)
-
-
+t = 1
 alpha = 0.7
-points(model$X[, 1, t], model$X[, 2, t], pch = 21,
-       cex = 2, xlim = lims, ylim = lims,
-       bg = adjustcolor('darkorange', alpha.f = alpha))
-     #pch = ifelse(dutch$demographics$ethnicity == 'dutch', 21, 22), 
-     #cex = 2, xlim = lims, ylim = lims,
-     #bg = ifelse(
-     #    dutch$demographics$sex == 'girl', 
-     #    adjustcolor('darkorange', alpha.f = alpha),
-     #    adjustcolor('steelblue', alpha)
-     #),
-     #col = c('white', 'red', 'black')[color_assesment])
+points(model$X[, 1, t], model$X[, 2, t],
+     pch = ifelse(dutch$demographics$ethnicity == 'dutch', 21, 22), 
+     cex = 2, xlim = lims, ylim = lims,
+     bg = ifelse(
+         dutch$demographics$sex == 'girl', 
+         adjustcolor('darkorange', alpha.f = alpha),
+         adjustcolor('steelblue', alpha)
+     ),
+     col = c('white', 'red', 'black')[color_assesment])
 text(model$X[, 1, t], model$X[, 2, t], labels = 1:nrow(model$X[,1,]), col = 'white', cex = 0.4)
 
 ```
 
-```{r synthetic_data}
-n_iter <- 5
+```{r synthetic_data_fitting}
+n_iter <- 8
 
-models <- list()
-datasets <- list()
-for(i in 1:n_iter) {
-    data <- synthetic_network(num_nodes = 25, num_time_steps = 5, seed = i * 7)
+results <- foreach(i = 1:n_iter) %dopar% {
+    data <- synthetic_network(num_nodes = 100, num_time_steps = 5, seed = i * 7)
     model <- lsmdn(data$Y)
-    datasets[[i]] <- data
-    models[[i]] <- models
+    list(data = data, model = model)
+}
+```
+
+```{r synthetic_summaries}
+# mean of beta_in
+beta_ins <- rep(0, n_iter)
+for (i in 1:n_iter) {
+    beta_ins[i] <- results[[i]]$model$beta_in
+}
+print("Beta In:")
+print(mean(beta_ins))
+print(sd(beta_ins))
+
+
+# mean of beta_in
+beta_outs <- rep(0, n_iter)
+for (i in 1:n_iter) {
+    beta_outs[i] <- results[[i]]$model$beta_out
+}
+print("Beta Out:")
+print(mean(beta_outs))
+print(sd(beta_outs))
+
+# correlation of radii
+radii_cor <- rep(0, n_iter)
+for (i in 1:n_iter) {
+    radii_fit <-  results[[i]]$model$radii
+    radii_true <- results[[i]]$data$radii
+    radii_cor[i] <- cor(radii_fit, radii_true)
+}
+print("Radii:")
+print(mean(radii_cor))
+print(sd(radii_cor))
+
+# aucs 
+aucs <- rep(0, n_iter)
+for (i in 1:n_iter) {
+    aucs[i] <- auc(results[[i]]$model)
+}
+print("AUCs:")
+print(mean(aucs))
+print(sd(aucs))
+```
+```{r distance_comparison}
+for(id in 1:8) {
+    X_fit <- results[[id]]$model$X
+    X_true <- results[[id]]$data$X
+
+    num_time_steps <- dim(X_fit)[3]
+    D_ratio <- 0
+    for(t in num_time_steps) {
+        D_fit <- as.vector(dist(X_fit[, , t]))
+        D_true <- as.vector(dist(X_true[, , t]))
+
+        keep_ids <- D_true > 1e-4
+        D_fit <- D_fit[keep_ids]
+        D_true <- D_true[keep_ids]
+    
+        D_ratio <- c(D_ratio, D_fit/D_true)
+    }
+    dens <- density(D_ratio, bw = "nrd")
+    if(id == 1) {
+        plot(dens, xlim = c(-1, 5), ylim = c(0, 3), 
+             xlab="Distance Ratio",
+             ylab="", main="",
+             yaxt = 'n', frame.plot = FALSE, 
+             col = adjustcolor('steelblue', alpha = 0.8))
+    } else {
+        lines(dens, col = adjustcolor('steelblue', alpha = 0.8))
+    }
+}
+```
+
+```{r simple_network}
+gs <- list()
+gs[[1]] <- igraph::watts.strogatz.game(1, 20, 3, 0.4)
+for(t in 2:3) {
+    Y <- igraph::as_adjacency_matrix(gs[[t - 1]])
+    
 }
 ```
