@@ -1,3 +1,4 @@
 useDynLib(lsmdn, .registration=TRUE)
 importFrom(Rcpp, evalCpp)
+importFrom(zeallot, `%<-%`)
 exportPattern("^[[:alpha:]]+")

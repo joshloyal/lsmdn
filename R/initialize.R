@@ -1,5 +1,3 @@
-library(zeallot)
-
 initialize_params <- function(Y, num_dimensions = 2) {
     n_nodes <- dim(Y)[1]
     n_time_steps <- dim(Y)[3]
